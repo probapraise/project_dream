@@ -92,6 +92,11 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
         status, eval_payload = _request_json("GET", f"{base}/runs/{sim['run_id']}/eval")
         assert status == 200
         assert eval_payload["schema_version"] == "eval.v1"
+
+        status, runlog = _request_json("GET", f"{base}/runs/{sim['run_id']}/runlog")
+        assert status == 200
+        assert runlog["run_id"] == sim["run_id"]
+        assert runlog["rows"]
     finally:
         server.shutdown()
         server.server_close()

@@ -27,6 +27,9 @@ class RunRepository(Protocol):
     def load_eval(self, run_id: str) -> dict:
         ...
 
+    def load_runlog(self, run_id: str) -> dict:
+        ...
+
 
 class FileRunRepository:
     def __init__(self, runs_dir: Path):
@@ -60,3 +63,15 @@ class FileRunRepository:
         if not path.exists():
             raise FileNotFoundError(f"Eval not found for run: {run_id}")
         return json.loads(path.read_text(encoding="utf-8"))
+
+    def load_runlog(self, run_id: str) -> dict:
+        run_dir = self.get_run(run_id)
+        path = run_dir / "runlog.jsonl"
+        if not path.exists():
+            raise FileNotFoundError(f"Runlog not found for run: {run_id}")
+        rows = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            rows.append(json.loads(line))
+        return {"run_id": run_id, "rows": rows}
