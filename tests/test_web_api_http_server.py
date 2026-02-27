@@ -194,3 +194,53 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_http_server_emits_structured_access_logs(tmp_path: Path):
+    api = ProjectDreamAPI(
+        repository=FileRunRepository(tmp_path / "runs"),
+        packs_dir=Path("packs"),
+    )
+    token = "log-token"
+    auth = {"Authorization": f"Bearer {token}"}
+    access_logs: list[dict] = []
+
+    server = create_server(
+        api=api,
+        host="127.0.0.1",
+        port=0,
+        api_token=token,
+        request_logger=access_logs.append,
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    try:
+        host, port = server.server_address
+        base = f"http://{host}:{port}"
+
+        _request_json("GET", f"{base}/health")
+        _request_json("GET", f"{base}/runs/latest")
+        _request_json("GET", f"{base}/runs/latest", headers=auth)
+
+        assert len(access_logs) >= 3
+        for entry in access_logs:
+            assert entry["method"] in {"GET", "POST"}
+            assert entry["path"].startswith("/")
+            assert isinstance(entry["status"], int)
+            assert isinstance(entry["latency_ms"], int)
+            assert isinstance(entry["auth_ok"], bool)
+            assert entry["event"] in {"http_request", "http_auth_failure"}
+
+        unauthorized_runs_latest = [
+            entry
+            for entry in access_logs
+            if entry["path"] == "/runs/latest" and entry["status"] == 401
+        ]
+        assert unauthorized_runs_latest
+        assert all(not entry["auth_ok"] for entry in unauthorized_runs_latest)
+        assert all(entry["event"] == "http_auth_failure" for entry in unauthorized_runs_latest)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

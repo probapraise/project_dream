@@ -1,5 +1,7 @@
 import argparse
+import json
 import os
+import sys
 from pathlib import Path
 
 from project_dream.app_service import evaluate_and_persist, simulate_and_persist
@@ -8,6 +10,10 @@ from project_dream.infra.store import FileRunRepository
 from project_dream.infra.web_api import ProjectDreamAPI
 from project_dream.models import SeedInput
 from project_dream.regression_runner import run_regression_batch
+
+
+def _emit_http_access_log(entry: dict) -> None:
+    print(json.dumps(entry, ensure_ascii=False), file=sys.stderr, flush=True)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -91,7 +97,13 @@ def main(argv: list[str] | None = None) -> int:
             packs_dir=Path(args.packs_dir),
         )
         try:
-            serve(api=api, host=args.host, port=args.port, api_token=api_token)
+            serve(
+                api=api,
+                host=args.host,
+                port=args.port,
+                api_token=api_token,
+                request_logger=_emit_http_access_log,
+            )
         except KeyboardInterrupt:
             return 0
 

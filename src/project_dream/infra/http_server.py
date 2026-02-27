@@ -1,4 +1,6 @@
 import json
+import time
+from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -15,18 +17,39 @@ def create_server(
     host: str = "127.0.0.1",
     port: int = 8000,
     api_token: str = "",
+    request_logger: Callable[[dict], None] | None = None,
 ) -> ThreadingHTTPServer:
     if not api_token:
         raise ValueError("api_token must be non-empty")
 
     class RequestHandler(BaseHTTPRequestHandler):
         def _send(self, status: int, payload: dict) -> None:
+            self._response_status = status
             body = _json_bytes(payload)
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+
+        def _emit_request_log(self, method: str, path: str, auth_ok: bool, started_at: float) -> None:
+            if request_logger is None:
+                return
+
+            status = self._response_status if self._response_status is not None else 500
+            event = "http_auth_failure" if status == 401 and not auth_ok else "http_request"
+            entry = {
+                "event": event,
+                "method": method,
+                "path": path,
+                "status": status,
+                "latency_ms": int((time.perf_counter() - started_at) * 1000),
+                "auth_ok": bool(auth_ok),
+            }
+            try:
+                request_logger(entry)
+            except Exception:  # pragma: no cover - logging must not break request flow
+                pass
 
         def _is_authorized(self, path: str) -> bool:
             if path == "/health":
@@ -43,12 +66,16 @@ def create_server(
             return json.loads(raw.decode("utf-8"))
 
         def do_GET(self) -> None:  # noqa: N802
+            started_at = time.perf_counter()
+            self._response_status = None
+            parsed = urlparse(self.path)
+            path = parsed.path
+            auth_ok = False
             try:
-                parsed = urlparse(self.path)
-                path = parsed.path
                 query = parse_qs(parsed.query)
 
-                if not self._is_authorized(path):
+                auth_ok = self._is_authorized(path)
+                if not auth_ok:
                     self._send(401, {"error": "unauthorized"})
                     return
 
@@ -93,18 +120,25 @@ def create_server(
                 self._send(400, {"error": "bad_request", "message": str(exc)})
             except Exception as exc:  # pragma: no cover - defensive
                 self._send(500, {"error": "internal_error", "message": str(exc)})
+            finally:
+                self._emit_request_log("GET", path, auth_ok, started_at)
 
         def do_POST(self) -> None:  # noqa: N802
+            started_at = time.perf_counter()
+            self._response_status = None
             parsed = urlparse(self.path)
             path = parsed.path
-            if not self._is_authorized(path):
+            auth_ok = self._is_authorized(path)
+            if not auth_ok:
                 self._send(401, {"error": "unauthorized"})
+                self._emit_request_log("POST", path, auth_ok, started_at)
                 return
 
             try:
                 body = self._read_json()
             except json.JSONDecodeError:
                 self._send(400, {"error": "invalid_json"})
+                self._emit_request_log("POST", path, auth_ok, started_at)
                 return
 
             try:
@@ -144,6 +178,8 @@ def create_server(
                 self._send(404, {"error": "not_found", "message": str(exc)})
             except Exception as exc:  # pragma: no cover - defensive
                 self._send(500, {"error": "internal_error", "message": str(exc)})
+            finally:
+                self._emit_request_log("POST", path, auth_ok, started_at)
 
         def log_message(self, format: str, *args) -> None:  # noqa: A003
             # Keep test output and CLI clean.
@@ -152,8 +188,20 @@ def create_server(
     return ThreadingHTTPServer((host, port), RequestHandler)
 
 
-def serve(api: ProjectDreamAPI, host: str = "127.0.0.1", port: int = 8000, api_token: str = "") -> None:
-    server = create_server(api=api, host=host, port=port, api_token=api_token)
+def serve(
+    api: ProjectDreamAPI,
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    api_token: str = "",
+    request_logger: Callable[[dict], None] | None = None,
+) -> None:
+    server = create_server(
+        api=api,
+        host=host,
+        port=port,
+        api_token=api_token,
+        request_logger=request_logger,
+    )
     try:
         server.serve_forever()
     finally:
