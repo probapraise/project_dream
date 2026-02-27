@@ -9,3 +9,23 @@ def test_generator_is_deterministic_for_same_seed():
     c1 = generate_comment(seed, participants[0], round_idx=1)
     c2 = generate_comment(seed, participants[0], round_idx=1)
     assert c1 == c2
+
+
+def test_generator_accepts_custom_llm_client():
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+
+        def generate(self, prompt: str, *, task: str) -> str:
+            self.calls.append({"prompt": prompt, "task": task})
+            return f"FAKE::{prompt}"
+
+    seed = SeedInput(seed_id="SEED-002", title="사건2", summary="요약2", board_id="B07", zone_id="D")
+    client = FakeClient()
+
+    output = generate_comment(seed, "P-777", round_idx=2, llm_client=client)
+
+    assert output.startswith("FAKE::")
+    assert len(client.calls) == 1
+    assert client.calls[0]["task"] == "comment_generation"
+    assert "[B07/D] R2 P-777" in client.calls[0]["prompt"]
