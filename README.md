@@ -18,6 +18,19 @@ python -m project_dream.cli serve --api-token local-dev-token
 `serve`는 `GET /health`를 제외한 모든 API 호출에 `Authorization: Bearer <token>` 헤더가 필요합니다.
 `serve` 실행 중에는 요청 로그가 stderr에 JSON 라인으로 출력되며, `method/path/status/latency_ms/auth_ok/event` 필드를 포함합니다.
 
+## Local Ops (3-Min Setup)
+
+```bash
+cp .env.example .env
+# .env에서 PROJECT_DREAM_API_TOKEN 값을 원하는 값으로 변경
+
+./scripts/dev_serve.sh
+# 다른 터미널에서:
+./scripts/smoke_api.sh
+```
+
+`.env`에서 `PROJECT_DREAM_HOST/PORT/RUNS_DIR/PACKS_DIR`를 조정하면 환경이 바뀌어도 같은 명령으로 서버 실행/검증이 가능합니다.
+
 ## CI Regression Gate
 
 GitHub Actions(`Regression Gate`)가 PR 및 `main` push에서 `pytest`와 `regress(metric-set v2)`를 자동 실행합니다.
