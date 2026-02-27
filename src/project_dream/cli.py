@@ -22,6 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     eva = sub.add_parser("evaluate")
     eva.add_argument("--runs-dir", required=False, default="runs")
     eva.add_argument("--run-id", required=False, default=None)
+    eva.add_argument("--metric-set", required=False, default="v1")
     return parser
 
 
@@ -39,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "evaluate":
         runs_dir = Path(args.runs_dir)
         run_dir = runs_dir / args.run_id if args.run_id else find_latest_run(runs_dir)
-        eval_result = evaluate_run(run_dir)
+        eval_result = evaluate_run(run_dir, metric_set=args.metric_set)
         persist_eval(run_dir, eval_result)
 
     return 0

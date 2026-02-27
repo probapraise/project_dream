@@ -59,6 +59,7 @@ class EvalCheck(BaseModel):
 
 class EvalResult(BaseModel):
     schema_version: str = "eval.v1"
+    metric_set: str = "v1"
     run_id: str
     seed_id: str
     pass_fail: bool

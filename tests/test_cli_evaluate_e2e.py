@@ -42,3 +42,4 @@ def test_cli_evaluate_writes_eval_json_for_latest_run(tmp_path: Path):
     payload = json.loads(eval_files[0].read_text(encoding="utf-8"))
     assert "checks" in payload
     assert "pass_fail" in payload
+    assert payload["metric_set"] == "v1"

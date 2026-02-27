@@ -18,6 +18,47 @@ REQUIRED_REPORT_KEYS = {
 }
 
 
+def _quality_metrics_v1(runlog_rows: list[dict], report: dict) -> dict[str, float]:
+    round_rows = [row for row in runlog_rows if row.get("type") == "round"]
+    gate_rows = [row for row in runlog_rows if row.get("type") == "gate"]
+    action_rows = [row for row in runlog_rows if row.get("type") == "action"]
+
+    moderation_actions = {
+        "HIDE_PREVIEW",
+        "LOCK_THREAD",
+        "GHOST_THREAD",
+        "SANCTION_USER",
+    }
+    moderation_count = sum(1 for row in action_rows if row.get("action_type") in moderation_actions)
+    intervention_rate = moderation_count / max(1, len(round_rows))
+
+    total_gate_checks = 0
+    failed_gate_checks = 0
+    for row in gate_rows:
+        gates = row.get("gates", [])
+        total_gate_checks += len(gates)
+        failed_gate_checks += sum(1 for gate in gates if not gate.get("passed"))
+    gate_rewrite_rate = failed_gate_checks / max(1, total_gate_checks)
+
+    communities = [row.get("community_id") for row in round_rows if row.get("community_id")]
+    unique_communities = len(set(communities))
+    # Phase1 packs define 4 communities.
+    community_dispersion = unique_communities / 4.0
+    if community_dispersion > 1.0:
+        community_dispersion = 1.0
+
+    return {
+        "moderation_intervention_rate": float(round(intervention_rate, 4)),
+        "gate_rewrite_rate": float(round(gate_rewrite_rate, 4)),
+        "community_dispersion": float(round(community_dispersion, 4)),
+    }
+
+
+METRIC_SET_REGISTRY = {
+    "v1": _quality_metrics_v1,
+}
+
+
 def _safe_read_json(path: Path) -> dict:
     if not path.exists():
         return {}
@@ -35,7 +76,10 @@ def _safe_read_jsonl(path: Path) -> list[dict]:
     return rows
 
 
-def evaluate_run(run_dir: Path) -> dict:
+def evaluate_run(run_dir: Path, metric_set: str = "v1") -> dict:
+    if metric_set not in METRIC_SET_REGISTRY:
+        raise ValueError(f"Unknown metric_set: {metric_set}")
+
     report = _safe_read_json(run_dir / "report.json")
     runlog_rows = _safe_read_jsonl(run_dir / "runlog.jsonl")
 
@@ -96,7 +140,10 @@ def evaluate_run(run_dir: Path) -> dict:
     )
 
     pass_fail = all(check.passed for check in checks)
+    quality_metrics = METRIC_SET_REGISTRY[metric_set](runlog_rows, report)
+
     result = EvalResult(
+        metric_set=metric_set,
         run_id=run_dir.name,
         seed_id=str(report.get("seed_id", "unknown")),
         pass_fail=pass_fail,
@@ -109,6 +156,7 @@ def evaluate_run(run_dir: Path) -> dict:
             "highlight_count": highlight_count,
             "dialogue_count": dialogue_count,
             "lens_count": lens_count,
+            **quality_metrics,
         },
     )
     return result.model_dump()
