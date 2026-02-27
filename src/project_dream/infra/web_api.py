@@ -39,6 +39,16 @@ class ProjectDreamAPI:
             metric_set=metric_set,
         )
 
+    def latest_run(self) -> dict:
+        run_dir = self.repository.find_latest_run()
+        return {"run_id": run_dir.name, "run_dir": str(run_dir)}
+
+    def get_report(self, run_id: str) -> dict:
+        return self.repository.load_report(run_id)
+
+    def get_eval(self, run_id: str) -> dict:
+        return self.repository.load_eval(run_id)
+
     def regress(
         self,
         *,
