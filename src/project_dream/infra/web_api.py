@@ -49,6 +49,9 @@ class ProjectDreamAPI:
     def get_eval(self, run_id: str) -> dict:
         return self.repository.load_eval(run_id)
 
+    def get_runlog(self, run_id: str) -> dict:
+        return self.repository.load_runlog(run_id)
+
     def regress(
         self,
         *,

@@ -35,12 +35,15 @@ def create_server(api: ProjectDreamAPI, host: str = "127.0.0.1", port: int = 800
                     return
 
                 parts = [p for p in self.path.split("/") if p]
-                if len(parts) == 3 and parts[0] == "runs" and parts[2] in {"report", "eval"}:
+                if len(parts) == 3 and parts[0] == "runs" and parts[2] in {"report", "eval", "runlog"}:
                     run_id = parts[1]
                     if parts[2] == "report":
                         self._send(200, api.get_report(run_id))
                         return
-                    self._send(200, api.get_eval(run_id))
+                    if parts[2] == "eval":
+                        self._send(200, api.get_eval(run_id))
+                        return
+                    self._send(200, api.get_runlog(run_id))
                     return
 
                 self._send(404, {"error": "not_found"})

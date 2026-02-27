@@ -65,7 +65,10 @@ def test_web_api_read_endpoints(tmp_path: Path):
     latest = api.latest_run()
     report = api.get_report(sim_res["run_id"])
     eva = api.get_eval(sim_res["run_id"])
+    runlog = api.get_runlog(sim_res["run_id"])
 
     assert latest["run_id"] == sim_res["run_id"]
     assert report["schema_version"] == "report.v1"
     assert eva["schema_version"] == "eval.v1"
+    assert runlog["run_id"] == sim_res["run_id"]
+    assert runlog["rows"]
