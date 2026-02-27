@@ -10,9 +10,11 @@ pytest -q
 python -m project_dream.cli simulate --seed examples/seeds/seed_001.json --output-dir runs --rounds 3
 python -m project_dream.cli evaluate --runs-dir runs --metric-set v2
 python -m project_dream.cli regress --seeds-dir examples/seeds/regression --output-dir runs --max-seeds 10
+python -m project_dream.cli serve --api-token local-dev-token
 ```
 
 `evaluate`는 스키마 체크와 함께 report 내용 품질 체크(중재포인트/떡밥/대사필드/severity 표준값)를 함께 검증합니다.
+`serve`는 `GET /health`를 제외한 모든 API 호출에 `Authorization: Bearer <token>` 헤더가 필요합니다.
 
 ## CI Regression Gate
 

@@ -10,7 +10,15 @@ def _json_bytes(payload: dict) -> bytes:
     return json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
 
-def create_server(api: ProjectDreamAPI, host: str = "127.0.0.1", port: int = 8000) -> ThreadingHTTPServer:
+def create_server(
+    api: ProjectDreamAPI,
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    api_token: str = "",
+) -> ThreadingHTTPServer:
+    if not api_token:
+        raise ValueError("api_token must be non-empty")
+
     class RequestHandler(BaseHTTPRequestHandler):
         def _send(self, status: int, payload: dict) -> None:
             body = _json_bytes(payload)
@@ -19,6 +27,15 @@ def create_server(api: ProjectDreamAPI, host: str = "127.0.0.1", port: int = 800
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+
+        def _is_authorized(self, path: str) -> bool:
+            if path == "/health":
+                return True
+            auth_header = self.headers.get("Authorization", "")
+            bearer_prefix = "Bearer "
+            if not auth_header.startswith(bearer_prefix):
+                return False
+            return auth_header[len(bearer_prefix) :].strip() == api_token
 
         def _read_json(self) -> dict:
             length = int(self.headers.get("Content-Length", "0"))
@@ -30,6 +47,10 @@ def create_server(api: ProjectDreamAPI, host: str = "127.0.0.1", port: int = 800
                 parsed = urlparse(self.path)
                 path = parsed.path
                 query = parse_qs(parsed.query)
+
+                if not self._is_authorized(path):
+                    self._send(401, {"error": "unauthorized"})
+                    return
 
                 if path == "/health":
                     self._send(200, api.health())
@@ -74,6 +95,12 @@ def create_server(api: ProjectDreamAPI, host: str = "127.0.0.1", port: int = 800
                 self._send(500, {"error": "internal_error", "message": str(exc)})
 
         def do_POST(self) -> None:  # noqa: N802
+            parsed = urlparse(self.path)
+            path = parsed.path
+            if not self._is_authorized(path):
+                self._send(401, {"error": "unauthorized"})
+                return
+
             try:
                 body = self._read_json()
             except json.JSONDecodeError:
@@ -81,14 +108,14 @@ def create_server(api: ProjectDreamAPI, host: str = "127.0.0.1", port: int = 800
                 return
 
             try:
-                if self.path == "/simulate":
+                if path == "/simulate":
                     seed_payload = body.get("seed", {})
                     rounds = int(body.get("rounds", 3))
                     payload = api.simulate(seed_payload=seed_payload, rounds=rounds)
                     self._send(200, payload)
                     return
 
-                if self.path == "/evaluate":
+                if path == "/evaluate":
                     payload = api.evaluate(
                         run_id=body.get("run_id"),
                         metric_set=body.get("metric_set", "v1"),
@@ -96,7 +123,7 @@ def create_server(api: ProjectDreamAPI, host: str = "127.0.0.1", port: int = 800
                     self._send(200, payload)
                     return
 
-                if self.path == "/regress":
+                if path == "/regress":
                     payload = api.regress(
                         seeds_dir=Path(body.get("seeds_dir", "examples/seeds/regression")),
                         rounds=int(body.get("rounds", 4)),
@@ -125,8 +152,8 @@ def create_server(api: ProjectDreamAPI, host: str = "127.0.0.1", port: int = 800
     return ThreadingHTTPServer((host, port), RequestHandler)
 
 
-def serve(api: ProjectDreamAPI, host: str = "127.0.0.1", port: int = 8000) -> None:
-    server = create_server(api=api, host=host, port=port)
+def serve(api: ProjectDreamAPI, host: str = "127.0.0.1", port: int = 8000, api_token: str = "") -> None:
+    server = create_server(api=api, host=host, port=port, api_token=api_token)
     try:
         server.serve_forever()
     finally:

@@ -1,4 +1,5 @@
 import argparse
+import os
 from pathlib import Path
 
 from project_dream.app_service import evaluate_and_persist, simulate_and_persist
@@ -41,6 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     srv.add_argument("--port", required=False, type=int, default=8000)
     srv.add_argument("--runs-dir", required=False, default="runs")
     srv.add_argument("--packs-dir", required=False, default="packs")
+    srv.add_argument("--api-token", required=False, default=None)
     return parser
 
 
@@ -80,12 +82,16 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0 if summary["pass_fail"] else 2
     elif args.command == "serve":
+        api_token = args.api_token or os.environ.get("PROJECT_DREAM_API_TOKEN")
+        if not api_token:
+            parser.error("serve requires --api-token or PROJECT_DREAM_API_TOKEN")
+
         api = ProjectDreamAPI.for_local_filesystem(
             runs_dir=Path(args.runs_dir),
             packs_dir=Path(args.packs_dir),
         )
         try:
-            serve(api=api, host=args.host, port=args.port)
+            serve(api=api, host=args.host, port=args.port, api_token=api_token)
         except KeyboardInterrupt:
             return 0
 

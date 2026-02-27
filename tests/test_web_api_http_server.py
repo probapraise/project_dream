@@ -1,5 +1,6 @@
 import json
 import threading
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -8,16 +9,26 @@ from project_dream.infra.store import FileRunRepository
 from project_dream.infra.web_api import ProjectDreamAPI
 
 
-def _request_json(method: str, url: str, payload: dict | None = None) -> tuple[int, dict]:
+def _request_json(
+    method: str,
+    url: str,
+    payload: dict | None = None,
+    headers: dict[str, str] | None = None,
+) -> tuple[int, dict]:
     data = None
-    headers = {}
+    request_headers = dict(headers or {})
     if payload is not None:
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        headers["Content-Type"] = "application/json"
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
-    with urllib.request.urlopen(req, timeout=5) as resp:
-        body = resp.read().decode("utf-8")
-        return resp.status, json.loads(body)
+        request_headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, data=data, headers=request_headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            body = resp.read().decode("utf-8")
+            return resp.status, json.loads(body)
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8")
+        payload = json.loads(body) if body else {}
+        return exc.code, payload
 
 
 def test_http_server_health_simulate_evaluate(tmp_path: Path):
@@ -25,7 +36,11 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
         repository=FileRunRepository(tmp_path / "runs"),
         packs_dir=Path("packs"),
     )
-    server = create_server(api=api, host="127.0.0.1", port=0)
+    token = "test-token"
+    auth = {"Authorization": f"Bearer {token}"}
+    wrong_auth = {"Authorization": "Bearer wrong-token"}
+
+    server = create_server(api=api, host="127.0.0.1", port=0, api_token=token)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
 
@@ -36,6 +51,14 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
         status, health = _request_json("GET", f"{base}/health")
         assert status == 200
         assert health["status"] == "ok"
+
+        status, unauthorized_latest = _request_json("GET", f"{base}/runs/latest")
+        assert status == 401
+        assert unauthorized_latest["error"] == "unauthorized"
+
+        status, wrong_token_latest = _request_json("GET", f"{base}/runs/latest", headers=wrong_auth)
+        assert status == 401
+        assert wrong_token_latest["error"] == "unauthorized"
 
         status, sim = _request_json(
             "POST",
@@ -50,9 +73,27 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
                 },
                 "rounds": 3,
             },
+            headers=auth,
         )
         assert status == 200
         assert sim["run_id"].startswith("run-")
+
+        status, unauthorized_sim = _request_json(
+            "POST",
+            f"{base}/simulate",
+            {
+                "seed": {
+                    "seed_id": "SEED-HTTP-UNAUTH",
+                    "title": "unauth",
+                    "summary": "unauth",
+                    "board_id": "B07",
+                    "zone_id": "D",
+                },
+                "rounds": 3,
+            },
+        )
+        assert status == 401
+        assert unauthorized_sim["error"] == "unauthorized"
 
         status, eva = _request_json(
             "POST",
@@ -61,6 +102,7 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
                 "run_id": sim["run_id"],
                 "metric_set": "v2",
             },
+            headers=auth,
         )
         assert status == 200
         assert eva["schema_version"] == "eval.v1"
@@ -75,6 +117,7 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
                 "max_seeds": 3,
                 "metric_set": "v2",
             },
+            headers=auth,
         )
         assert status == 200
         assert reg["schema_version"] == "regression.v1"
@@ -89,24 +132,25 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
                 "max_seeds": 2,
                 "metric_set": "v1",
             },
+            headers=auth,
         )
         assert status == 200
         assert reg_second["schema_version"] == "regression.v1"
         assert reg_second["totals"]["seed_runs"] == 2
 
-        status, reg_list = _request_json("GET", f"{base}/regressions")
+        status, reg_list = _request_json("GET", f"{base}/regressions", headers=auth)
         assert status == 200
         assert reg_list["count"] >= 2
         assert len(reg_list["items"]) >= 2
         assert reg_list["items"][0]["summary_id"].startswith("regression-")
         assert reg_list["items"][0]["summary_path"].endswith(".json")
 
-        status, reg_list_limited = _request_json("GET", f"{base}/regressions?limit=1")
+        status, reg_list_limited = _request_json("GET", f"{base}/regressions?limit=1", headers=auth)
         assert status == 200
         assert reg_list_limited["count"] == 1
         assert len(reg_list_limited["items"]) == 1
 
-        status, reg_latest = _request_json("GET", f"{base}/regressions/latest")
+        status, reg_latest = _request_json("GET", f"{base}/regressions/latest", headers=auth)
         assert status == 200
         assert reg_latest["schema_version"] == "regression.v1"
         assert reg_latest["metric_set"] == "v1"
@@ -115,17 +159,17 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
         summary_id = Path(reg_latest["summary_path"]).name
         summary_id_stem = summary_id.removesuffix(".json")
 
-        status, reg_by_filename = _request_json("GET", f"{base}/regressions/{summary_id}")
+        status, reg_by_filename = _request_json("GET", f"{base}/regressions/{summary_id}", headers=auth)
         assert status == 200
         assert reg_by_filename["schema_version"] == "regression.v1"
         assert reg_by_filename["summary_path"].endswith(summary_id)
 
-        status, reg_by_stem = _request_json("GET", f"{base}/regressions/{summary_id_stem}")
+        status, reg_by_stem = _request_json("GET", f"{base}/regressions/{summary_id_stem}", headers=auth)
         assert status == 200
         assert reg_by_stem["schema_version"] == "regression.v1"
         assert reg_by_stem["summary_path"].endswith(summary_id)
 
-        status, latest = _request_json("GET", f"{base}/runs/latest")
+        status, latest = _request_json("GET", f"{base}/runs/latest", headers=auth)
         assert status == 200
         known_run_ids = {
             sim["run_id"],
@@ -134,15 +178,15 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
         }
         assert latest["run_id"] in known_run_ids
 
-        status, report = _request_json("GET", f"{base}/runs/{sim['run_id']}/report")
+        status, report = _request_json("GET", f"{base}/runs/{sim['run_id']}/report", headers=auth)
         assert status == 200
         assert report["schema_version"] == "report.v1"
 
-        status, eval_payload = _request_json("GET", f"{base}/runs/{sim['run_id']}/eval")
+        status, eval_payload = _request_json("GET", f"{base}/runs/{sim['run_id']}/eval", headers=auth)
         assert status == 200
         assert eval_payload["schema_version"] == "eval.v1"
 
-        status, runlog = _request_json("GET", f"{base}/runs/{sim['run_id']}/runlog")
+        status, runlog = _request_json("GET", f"{base}/runs/{sim['run_id']}/runlog", headers=auth)
         assert status == 200
         assert runlog["run_id"] == sim["run_id"]
         assert runlog["rows"]
