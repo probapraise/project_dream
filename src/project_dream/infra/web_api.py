@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from project_dream.app_service import evaluate_and_persist, simulate_and_persist
+from project_dream.app_service import evaluate_and_persist, regress_and_persist, simulate_and_persist
 from project_dream.infra.store import FileRunRepository, RunRepository
 from project_dream.models import SeedInput
 
@@ -37,4 +37,29 @@ class ProjectDreamAPI:
             repository=self.repository,
             run_id=run_id,
             metric_set=metric_set,
+        )
+
+    def regress(
+        self,
+        *,
+        seeds_dir: Path = Path("examples/seeds/regression"),
+        rounds: int = 4,
+        max_seeds: int = 10,
+        metric_set: str = "v1",
+        min_community_coverage: int = 2,
+        min_conflict_frame_runs: int = 2,
+        min_moderation_hook_runs: int = 1,
+        min_validation_warning_runs: int = 1,
+    ) -> dict:
+        return regress_and_persist(
+            repository=self.repository,
+            packs_dir=self.packs_dir,
+            seeds_dir=seeds_dir,
+            rounds=rounds,
+            max_seeds=max_seeds,
+            metric_set=metric_set,
+            min_community_coverage=min_community_coverage,
+            min_conflict_frame_runs=min_conflict_frame_runs,
+            min_moderation_hook_runs=min_moderation_hook_runs,
+            min_validation_warning_runs=min_validation_warning_runs,
         )

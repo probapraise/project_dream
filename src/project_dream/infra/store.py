@@ -6,6 +6,8 @@ from project_dream.storage import persist_eval, persist_run
 
 
 class RunRepository(Protocol):
+    runs_dir: Path
+
     def persist_run(self, sim_result: dict, report: dict) -> Path:
         ...
 

@@ -1,5 +1,6 @@
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 from project_dream.infra.web_api import ProjectDreamAPI
 
@@ -48,6 +49,20 @@ def create_server(api: ProjectDreamAPI, host: str = "127.0.0.1", port: int = 800
                     payload = api.evaluate(
                         run_id=body.get("run_id"),
                         metric_set=body.get("metric_set", "v1"),
+                    )
+                    self._send(200, payload)
+                    return
+
+                if self.path == "/regress":
+                    payload = api.regress(
+                        seeds_dir=Path(body.get("seeds_dir", "examples/seeds/regression")),
+                        rounds=int(body.get("rounds", 4)),
+                        max_seeds=int(body.get("max_seeds", 10)),
+                        metric_set=body.get("metric_set", "v1"),
+                        min_community_coverage=int(body.get("min_community_coverage", 2)),
+                        min_conflict_frame_runs=int(body.get("min_conflict_frame_runs", 2)),
+                        min_moderation_hook_runs=int(body.get("min_moderation_hook_runs", 1)),
+                        min_validation_warning_runs=int(body.get("min_validation_warning_runs", 1)),
                     )
                     self._send(200, payload)
                     return
