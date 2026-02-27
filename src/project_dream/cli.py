@@ -3,7 +3,7 @@ from pathlib import Path
 
 from project_dream.models import SeedInput
 from project_dream.pack_service import load_packs
-from project_dream.report_generator import build_report
+from project_dream.report_generator import build_report_v1
 from project_dream.sim_orchestrator import run_simulation
 from project_dream.storage import persist_run
 
@@ -29,7 +29,7 @@ def main(argv: list[str] | None = None) -> int:
         seed = SeedInput.model_validate_json(seed_path.read_text(encoding="utf-8"))
         packs = load_packs(Path(args.packs_dir), enforce_phase1_minimums=True)
         sim_result = run_simulation(seed=seed, rounds=args.rounds, corpus=[], packs=packs)
-        report = build_report(seed, sim_result)
+        report = build_report_v1(seed, sim_result, packs)
         persist_run(Path(args.output_dir), sim_result, report)
 
     return 0

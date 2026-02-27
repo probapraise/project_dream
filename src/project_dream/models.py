@@ -23,3 +23,29 @@ class GateResult(BaseModel):
     passed: bool
     reason: str
     rewritten_text: str | None = None
+
+
+class ReportConflictMap(BaseModel):
+    claim_a: str
+    claim_b: str
+    third_interest: str
+    mediation_points: list[str]
+
+
+class ReportRiskCheck(BaseModel):
+    category: str
+    severity: str
+    details: str
+
+
+class ReportV1(BaseModel):
+    schema_version: str = "report.v1"
+    seed_id: str
+    title: str
+    summary: str
+    lens_summaries: list[dict]
+    highlights_top10: list[dict]
+    conflict_map: ReportConflictMap
+    dialogue_candidates: list[dict]
+    foreshadowing: list[str]
+    risk_checks: list[ReportRiskCheck]

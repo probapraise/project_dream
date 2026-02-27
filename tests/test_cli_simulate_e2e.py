@@ -33,9 +33,22 @@ def test_cli_simulate_writes_run_outputs(tmp_path: Path):
     assert rc == 0
     runlogs = list((tmp_path / "runs").glob("*/runlog.jsonl"))
     assert runlogs
-    assert any((tmp_path / "runs").glob("*/report.md"))
+    report_md_files = list((tmp_path / "runs").glob("*/report.md"))
+    report_json_files = list((tmp_path / "runs").glob("*/report.json"))
+    assert report_md_files
+    assert report_json_files
 
     runlog_path = runlogs[0]
     rows = [json.loads(line) for line in runlog_path.read_text(encoding="utf-8").splitlines()]
     assert any(row.get("type") == "round" and "community_id" in row for row in rows)
     assert any(row.get("type") == "action" for row in rows)
+
+    report_json = json.loads(report_json_files[0].read_text(encoding="utf-8"))
+    assert report_json["schema_version"] == "report.v1"
+    assert len(report_json["lens_summaries"]) == 4
+    assert "conflict_map" in report_json
+    assert 3 <= len(report_json["dialogue_candidates"]) <= 5
+
+    report_md = report_md_files[0].read_text(encoding="utf-8")
+    assert "## Conflict Map" in report_md
+    assert "## Risk Checks" in report_md
