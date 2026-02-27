@@ -1,13 +1,19 @@
 import re
 
 from rapidfuzz.fuzz import ratio
+from project_dream.prompt_templates import render_prompt
 
 
 PHONE_PATTERN = re.compile(r"01[0-9]-\d{3,4}-\d{4}")
 TABOO_WORDS = ["실명", "서명 단서", "사망 조롱"]
 
 
-def run_gates(text: str, corpus: list[str], similarity_threshold: int = 85) -> dict:
+def run_gates(
+    text: str,
+    corpus: list[str],
+    similarity_threshold: int = 85,
+    template_set: str = "v1",
+) -> dict:
     gates = []
     current = text
 
@@ -39,6 +45,12 @@ def run_gates(text: str, corpus: list[str], similarity_threshold: int = 85) -> d
     lore_pass = ("정본" in current) or ("증거" in current)
     if not lore_pass:
         current = f"{current} / 증거 기준 미기재"
-    gates.append({"gate_name": "lore", "passed": lore_pass, "reason": "requires evidence context"})
+    gates.append(
+        {
+            "gate_name": "lore",
+            "passed": lore_pass,
+            "reason": render_prompt("validation_lore", template_set=template_set),
+        }
+    )
 
     return {"final_text": current, "gates": gates}

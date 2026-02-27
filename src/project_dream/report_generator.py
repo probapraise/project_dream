@@ -1,6 +1,7 @@
 from collections import Counter
 
 from project_dream.models import ReportConflictMap, ReportRiskCheck, ReportV1
+from project_dream.prompt_templates import render_prompt
 
 
 def _build_lens_summaries(sim_result: dict, packs) -> list[dict]:
@@ -135,10 +136,17 @@ def _build_risk_checks(sim_result: dict) -> list[ReportRiskCheck]:
 
 
 def build_report_v1(seed, sim_result: dict, packs) -> dict:
+    round_count = len(sim_result.get("rounds", []))
     report = ReportV1(
         seed_id=seed.seed_id,
         title=seed.title,
-        summary=f"{seed.title} / 라운드 {len(sim_result.get('rounds', []))}",
+        summary=render_prompt(
+            "report_summary",
+            {
+                "title": seed.title,
+                "round_count": round_count,
+            },
+        ),
         lens_summaries=_build_lens_summaries(sim_result, packs),
         highlights_top10=_build_highlights_top10(sim_result),
         conflict_map=_build_conflict_map(sim_result),
