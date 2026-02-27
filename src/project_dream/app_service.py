@@ -4,6 +4,7 @@ from project_dream.eval_suite import evaluate_run
 from project_dream.infra.store import RunRepository
 from project_dream.models import SeedInput
 from project_dream.pack_service import load_packs
+from project_dream.regression_runner import run_regression_batch
 from project_dream.report_generator import build_report_v1
 from project_dream.sim_orchestrator import run_simulation
 
@@ -31,3 +32,30 @@ def evaluate_and_persist(
     eval_result = evaluate_run(run_dir, metric_set=metric_set)
     repository.persist_eval(run_dir, eval_result)
     return eval_result
+
+
+def regress_and_persist(
+    *,
+    repository: RunRepository,
+    packs_dir: Path,
+    seeds_dir: Path = Path("examples/seeds/regression"),
+    rounds: int = 4,
+    max_seeds: int = 10,
+    metric_set: str = "v1",
+    min_community_coverage: int = 2,
+    min_conflict_frame_runs: int = 2,
+    min_moderation_hook_runs: int = 1,
+    min_validation_warning_runs: int = 1,
+) -> dict:
+    return run_regression_batch(
+        seeds_dir=seeds_dir,
+        packs_dir=packs_dir,
+        output_dir=repository.runs_dir,
+        rounds=rounds,
+        max_seeds=max_seeds,
+        metric_set=metric_set,
+        min_community_coverage=min_community_coverage,
+        min_conflict_frame_runs=min_conflict_frame_runs,
+        min_moderation_hook_runs=min_moderation_hook_runs,
+        min_validation_warning_runs=min_validation_warning_runs,
+    )

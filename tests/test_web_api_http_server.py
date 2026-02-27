@@ -65,6 +65,20 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
         assert status == 200
         assert eva["schema_version"] == "eval.v1"
         assert eva["metric_set"] == "v2"
+
+        status, reg = _request_json(
+            "POST",
+            f"{base}/regress",
+            {
+                "seeds_dir": "examples/seeds/regression",
+                "rounds": 3,
+                "max_seeds": 3,
+                "metric_set": "v2",
+            },
+        )
+        assert status == 200
+        assert reg["schema_version"] == "regression.v1"
+        assert reg["totals"]["seed_runs"] == 3
     finally:
         server.shutdown()
         server.server_close()

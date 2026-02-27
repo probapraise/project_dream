@@ -29,3 +29,18 @@ def test_web_api_simulate_and_evaluate(tmp_path: Path):
     eval_res = api.evaluate(run_id=sim_res["run_id"], metric_set="v2")
     assert eval_res["schema_version"] == "eval.v1"
     assert eval_res["metric_set"] == "v2"
+
+
+def test_web_api_regress(tmp_path: Path):
+    repo = FileRunRepository(tmp_path / "runs")
+    api = ProjectDreamAPI(repository=repo, packs_dir=Path("packs"))
+
+    summary = api.regress(
+        seeds_dir=Path("examples/seeds/regression"),
+        rounds=3,
+        max_seeds=3,
+        metric_set="v2",
+    )
+    assert summary["schema_version"] == "regression.v1"
+    assert summary["metric_set"] == "v2"
+    assert summary["totals"]["seed_runs"] == 3
