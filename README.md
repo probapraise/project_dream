@@ -13,3 +13,7 @@ python -m project_dream.cli regress --seeds-dir examples/seeds/regression --outp
 ```
 
 `evaluate`는 스키마 체크와 함께 report 내용 품질 체크(중재포인트/떡밥/대사필드/severity 표준값)를 함께 검증합니다.
+
+## CI Regression Gate
+
+GitHub Actions(`Regression Gate`)가 PR 및 `main` push에서 `pytest`와 `regress(metric-set v2)`를 자동 실행합니다.
