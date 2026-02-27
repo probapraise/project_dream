@@ -16,6 +16,7 @@ REQUIRED_REPORT_KEYS = {
     "foreshadowing",
     "risk_checks",
 }
+VALID_RISK_SEVERITIES = {"low", "medium", "high"}
 
 
 def _quality_metrics_v1(runlog_rows: list[dict], report: dict) -> dict[str, float]:
@@ -118,6 +119,74 @@ def _safe_read_jsonl(path: Path) -> list[dict]:
     return rows
 
 
+def _report_quality_checks_v1(report: dict) -> list[EvalCheck]:
+    checks: list[EvalCheck] = []
+
+    conflict_map = report.get("conflict_map", {})
+    mediation_points = conflict_map.get("mediation_points", []) if isinstance(conflict_map, dict) else []
+    mediation_count = len(mediation_points) if isinstance(mediation_points, list) else 0
+    checks.append(
+        EvalCheck(
+            name="report.conflict_map.mediation_points_count",
+            passed=mediation_count >= 1,
+            details=f"mediation_points={mediation_count}",
+        )
+    )
+
+    foreshadowing = report.get("foreshadowing", [])
+    foreshadowing_count = len(foreshadowing) if isinstance(foreshadowing, list) else 0
+    checks.append(
+        EvalCheck(
+            name="report.foreshadowing_count",
+            passed=foreshadowing_count >= 1,
+            details=f"foreshadowing_count={foreshadowing_count}",
+        )
+    )
+
+    dialogue_candidates = report.get("dialogue_candidates", [])
+    invalid_dialogue_indices: list[int] = []
+    if not isinstance(dialogue_candidates, list):
+        invalid_dialogue_indices.append(-1)
+    else:
+        for idx, item in enumerate(dialogue_candidates):
+            if not isinstance(item, dict):
+                invalid_dialogue_indices.append(idx)
+                continue
+            speaker = str(item.get("speaker", "")).strip()
+            line = str(item.get("line", "")).strip()
+            if not speaker or not line:
+                invalid_dialogue_indices.append(idx)
+    checks.append(
+        EvalCheck(
+            name="report.dialogue_candidate_fields",
+            passed=len(invalid_dialogue_indices) == 0 and isinstance(dialogue_candidates, list),
+            details=f"invalid_indices={invalid_dialogue_indices}",
+        )
+    )
+
+    risk_checks = report.get("risk_checks", [])
+    invalid_severity_indices: list[int] = []
+    if isinstance(risk_checks, list):
+        for idx, item in enumerate(risk_checks):
+            if not isinstance(item, dict):
+                invalid_severity_indices.append(idx)
+                continue
+            severity = str(item.get("severity", "")).strip().lower()
+            if severity not in VALID_RISK_SEVERITIES:
+                invalid_severity_indices.append(idx)
+    else:
+        invalid_severity_indices.append(-1)
+    checks.append(
+        EvalCheck(
+            name="report.risk_checks.severity_values",
+            passed=len(invalid_severity_indices) == 0 and isinstance(risk_checks, list),
+            details=f"invalid_indices={invalid_severity_indices}",
+        )
+    )
+
+    return checks
+
+
 def evaluate_run(run_dir: Path, metric_set: str = "v1") -> dict:
     if metric_set not in METRIC_SET_REGISTRY:
         raise ValueError(f"Unknown metric_set: {metric_set}")
@@ -180,6 +249,8 @@ def evaluate_run(run_dir: Path, metric_set: str = "v1") -> dict:
             details=f"highlight_count={highlight_count}",
         )
     )
+
+    checks.extend(_report_quality_checks_v1(report))
 
     pass_fail = all(check.passed for check in checks)
     quality_metrics = METRIC_SET_REGISTRY[metric_set](runlog_rows, report)
