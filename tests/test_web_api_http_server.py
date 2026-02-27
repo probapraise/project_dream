@@ -80,11 +80,37 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
         assert reg["schema_version"] == "regression.v1"
         assert reg["totals"]["seed_runs"] == 3
 
+        status, reg_second = _request_json(
+            "POST",
+            f"{base}/regress",
+            {
+                "seeds_dir": "examples/seeds/regression",
+                "rounds": 3,
+                "max_seeds": 2,
+                "metric_set": "v1",
+            },
+        )
+        assert status == 200
+        assert reg_second["schema_version"] == "regression.v1"
+        assert reg_second["totals"]["seed_runs"] == 2
+
+        status, reg_list = _request_json("GET", f"{base}/regressions")
+        assert status == 200
+        assert reg_list["count"] >= 2
+        assert len(reg_list["items"]) >= 2
+        assert reg_list["items"][0]["summary_id"].startswith("regression-")
+        assert reg_list["items"][0]["summary_path"].endswith(".json")
+
+        status, reg_list_limited = _request_json("GET", f"{base}/regressions?limit=1")
+        assert status == 200
+        assert reg_list_limited["count"] == 1
+        assert len(reg_list_limited["items"]) == 1
+
         status, reg_latest = _request_json("GET", f"{base}/regressions/latest")
         assert status == 200
         assert reg_latest["schema_version"] == "regression.v1"
-        assert reg_latest["metric_set"] == "v2"
-        assert reg_latest["totals"]["seed_runs"] == 3
+        assert reg_latest["metric_set"] == "v1"
+        assert reg_latest["totals"]["seed_runs"] == 2
         assert reg_latest["summary_path"].endswith(".json")
         summary_id = Path(reg_latest["summary_path"]).name
         summary_id_stem = summary_id.removesuffix(".json")
@@ -101,7 +127,11 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
 
         status, latest = _request_json("GET", f"{base}/runs/latest")
         assert status == 200
-        known_run_ids = {sim["run_id"], *[row["run_id"] for row in reg["runs"]]}
+        known_run_ids = {
+            sim["run_id"],
+            *[row["run_id"] for row in reg["runs"]],
+            *[row["run_id"] for row in reg_second["runs"]],
+        }
         assert latest["run_id"] in known_run_ids
 
         status, report = _request_json("GET", f"{base}/runs/{sim['run_id']}/report")

@@ -36,6 +36,9 @@ class RunRepository(Protocol):
     def load_regression_summary(self, summary_id: str) -> dict:
         ...
 
+    def list_regression_summaries(self, limit: int | None = None) -> dict:
+        ...
+
 
 class FileRunRepository:
     def __init__(self, runs_dir: Path):
@@ -103,3 +106,29 @@ class FileRunRepository:
         payload = json.loads(path.read_text(encoding="utf-8"))
         payload.setdefault("summary_path", str(path))
         return payload
+
+    def list_regression_summaries(self, limit: int | None = None) -> dict:
+        if limit is not None and limit < 1:
+            raise ValueError(f"Invalid limit: {limit}")
+
+        regressions_dir = self.runs_dir / "regressions"
+        summary_files = sorted(regressions_dir.glob("regression-*.json"), reverse=True)
+        if limit is not None:
+            summary_files = summary_files[:limit]
+
+        items = []
+        for path in summary_files:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            totals = payload.get("totals", {})
+            items.append(
+                {
+                    "summary_id": path.name,
+                    "summary_path": str(path),
+                    "generated_at_utc": payload.get("generated_at_utc"),
+                    "metric_set": payload.get("metric_set"),
+                    "pass_fail": bool(payload.get("pass_fail")),
+                    "seed_runs": int(totals.get("seed_runs", 0)),
+                }
+            )
+
+        return {"count": len(items), "items": items}

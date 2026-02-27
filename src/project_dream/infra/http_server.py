@@ -1,6 +1,7 @@
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 from project_dream.infra.web_api import ProjectDreamAPI
 
@@ -26,19 +27,29 @@ def create_server(api: ProjectDreamAPI, host: str = "127.0.0.1", port: int = 800
 
         def do_GET(self) -> None:  # noqa: N802
             try:
-                if self.path == "/health":
+                parsed = urlparse(self.path)
+                path = parsed.path
+                query = parse_qs(parsed.query)
+
+                if path == "/health":
                     self._send(200, api.health())
                     return
 
-                if self.path == "/runs/latest":
+                if path == "/runs/latest":
                     self._send(200, api.latest_run())
                     return
 
-                if self.path == "/regressions/latest":
+                if path == "/regressions":
+                    limit_raw = query.get("limit", [None])[0]
+                    limit = None if limit_raw in (None, "") else int(limit_raw)
+                    self._send(200, api.list_regression_summaries(limit=limit))
+                    return
+
+                if path == "/regressions/latest":
                     self._send(200, api.latest_regression_summary())
                     return
 
-                parts = [p for p in self.path.split("/") if p]
+                parts = [p for p in path.split("/") if p]
                 if len(parts) == 2 and parts[0] == "regressions":
                     self._send(200, api.get_regression_summary(parts[1]))
                     return

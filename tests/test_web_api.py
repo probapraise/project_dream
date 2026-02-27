@@ -86,6 +86,39 @@ def test_web_api_regression_summary_by_id(tmp_path: Path):
     assert loaded_with_stem["summary_path"].endswith(summary_id)
 
 
+def test_web_api_list_regression_summaries(tmp_path: Path):
+    repo = FileRunRepository(tmp_path / "runs")
+    api = ProjectDreamAPI(repository=repo, packs_dir=Path("packs"))
+
+    api.regress(
+        seeds_dir=Path("examples/seeds/regression"),
+        rounds=3,
+        max_seeds=2,
+        metric_set="v1",
+    )
+    api.regress(
+        seeds_dir=Path("examples/seeds/regression"),
+        rounds=3,
+        max_seeds=2,
+        metric_set="v2",
+    )
+
+    listed = api.list_regression_summaries()
+    latest = api.latest_regression_summary()
+    latest_id = Path(latest["summary_path"]).name
+
+    assert listed["count"] == 2
+    assert len(listed["items"]) == 2
+    assert listed["items"][0]["summary_id"] == latest_id
+    assert listed["items"][0]["summary_path"].endswith(latest_id)
+    assert listed["items"][0]["metric_set"] in {"v1", "v2"}
+    assert isinstance(listed["items"][0]["pass_fail"], bool)
+
+    limited = api.list_regression_summaries(limit=1)
+    assert limited["count"] == 1
+    assert len(limited["items"]) == 1
+
+
 def test_web_api_read_endpoints(tmp_path: Path):
     repo = FileRunRepository(tmp_path / "runs")
     api = ProjectDreamAPI(repository=repo, packs_dir=Path("packs"))
