@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "boards": [
+    {"id": "B01", "name": "첫마루", "topic": "속보·잡담·공지·루머", "emotion": "군중심리", "taboos": ["realname_dox", "signature_dox"], "memes": ["정본 내놔", "요약각"]},
+    {"id": "B02", "name": "문답석", "topic": "과제·주문·조제 Q&A", "emotion": "실용", "taboos": ["unsafe_recipe", "cheat_answer"], "memes": ["조건부터", "3줄요약"]},
+    {"id": "B03", "name": "입증서가", "topic": "이론·재현성·반례", "emotion": "정밀", "taboos": ["no_evidence", "authority_abuse"], "memes": ["재현로그", "반례투척"]},
+    {"id": "B04", "name": "연무벽", "topic": "대련·증명전", "emotion": "승부욕", "taboos": ["injury_dox", "doping_claim_no_proof"], "memes": ["로그로말해", "한방컷"]},
+    {"id": "B05", "name": "귀환록", "topic": "현장실습·외부임무", "emotion": "피로", "taboos": ["location_leak", "unit_dox"], "memes": ["기밀각", "현장팁"]},
+    {"id": "B06", "name": "룬대장간", "topic": "장비·세팅·개조", "emotion": "덕심", "taboos": ["core_circuit_leak", "ad_disguise"], "memes": ["룬빨", "짭룬주의"]},
+    {"id": "B07", "name": "장터기둥", "topic": "거래·의뢰·수리", "emotion": "불신", "taboos": ["illegal_trade", "fake_review"], "memes": ["예치금", "후기폭격"]},
+    {"id": "B08", "name": "열쇠방", "topic": "도서관·자료요청", "emotion": "갈증", "taboos": ["forbidden_text_share", "access_sell"], "memes": ["열람권컷", "서고문턱"]},
+    {"id": "B09", "name": "감정대", "topic": "공증·감정·증거력", "emotion": "절차주의", "taboos": ["forgery_method", "appraiser_dox"], "memes": ["정본번호", "만료카운트"]},
+    {"id": "B10", "name": "후원살롱", "topic": "가문·후원·파벌", "emotion": "품위", "taboos": ["family_secret", "leak_to_public"], "memes": ["상석", "품위로때린다"]},
+    {"id": "B11", "name": "조문관", "topic": "학칙·징계·항소", "emotion": "분노", "taboos": ["appeal_dox", "bypass_guide"], "memes": ["조항들이밀기", "완장등판"]},
+    {"id": "B12", "name": "구호탑", "topic": "사고·부상·오염", "emotion": "공포", "taboos": ["patient_dox", "panic_false_alarm"], "memes": ["빨간등", "정화먼저"]},
+    {"id": "B13", "name": "기숙사 밤마당", "topic": "생활·통금·분실", "emotion": "친근", "taboos": ["room_dox", "thief_dox"], "memes": ["통금빔", "세탁실전쟁"]},
+    {"id": "B14", "name": "차담방", "topic": "연애·매너·관계", "emotion": "설렘", "taboos": ["outing", "victim_labeling"], "memes": ["호칭실수", "선긋기"]},
+    {"id": "B15", "name": "교어관", "topic": "유학생·문화충돌", "emotion": "피로", "taboos": ["hate_speech", "treaty_leak"], "memes": ["번역오해", "예절패치"]},
+    {"id": "B16", "name": "풍자극장", "topic": "패러디·밈·짤", "emotion": "냉소", "taboos": ["death_mocking", "realname_mock"], "memes": ["사료됨", "정리각"]},
+    {"id": "B17", "name": "정렬탑", "topic": "정렬·신고·모더 메타", "emotion": "권력의식", "taboos": ["mod_dox", "filter_bypass_share"], "memes": ["정렬이진실", "유령처리감지"]},
+    {"id": "B18", "name": "그림자서재", "topic": "금서·암호교환", "emotion": "편집증", "taboos": ["forbidden_formula", "inviter_dox"], "memes": ["흑서고", "초대장필수"]}
+  ]
+}

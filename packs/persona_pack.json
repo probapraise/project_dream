@@ -1,0 +1,27 @@
+{
+  "version": "1.0.0",
+  "archetypes": [
+    {"id": "AG-01", "name": "정리꾼", "style": "요약 중심"},
+    {"id": "AG-02", "name": "규정러", "style": "조항 인용"},
+    {"id": "AG-03", "name": "선동러", "style": "감정 과열"},
+    {"id": "AG-04", "name": "팩트체커", "style": "근거 추적"},
+    {"id": "AG-05", "name": "거래러", "style": "비용 계산"},
+    {"id": "AG-06", "name": "풍자러", "style": "밈/패러디"},
+    {"id": "AG-07", "name": "피해호소형", "style": "경험 중심"},
+    {"id": "AG-08", "name": "운영옹호형", "style": "질서 우선"},
+    {"id": "AG-09", "name": "음모론형", "style": "의혹 연결"},
+    {"id": "AG-10", "name": "중재형", "style": "절충 제안"}
+  ],
+  "personas": [
+    {"id": "P01", "char_id": "CHAR-ST-001", "archetype_id": "AG-07", "main_com": "COM-PLZ-001"},
+    {"id": "P02", "char_id": "CHAR-ST-002", "archetype_id": "AG-01", "main_com": "COM-PLZ-001"},
+    {"id": "P03", "char_id": "CHAR-ST-003", "archetype_id": "AG-03", "main_com": "COM-PLZ-002"},
+    {"id": "P04", "char_id": "CHAR-ST-004", "archetype_id": "AG-04", "main_com": "COM-PLZ-002"},
+    {"id": "P05", "char_id": "CHAR-PR-001", "archetype_id": "AG-08", "main_com": "COM-PLZ-003"},
+    {"id": "P06", "char_id": "CHAR-IN-001", "archetype_id": "AG-02", "main_com": "COM-PLZ-003"},
+    {"id": "P07", "char_id": "CHAR-MK-001", "archetype_id": "AG-05", "main_com": "COM-PLZ-004"},
+    {"id": "P08", "char_id": "CHAR-EL-001", "archetype_id": "AG-10", "main_com": "COM-PLZ-004"},
+    {"id": "P09", "char_id": "CHAR-MC-001", "archetype_id": "AG-04", "main_com": "COM-PLZ-001"},
+    {"id": "P10", "char_id": "CHAR-ST-005", "archetype_id": "AG-09", "main_com": "COM-PLZ-003"}
+  ]
+}

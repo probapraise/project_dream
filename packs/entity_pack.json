@@ -1,0 +1,22 @@
+{
+  "version": "1.0.0",
+  "orgs": [
+    {"id": "ORG-PR-001", "name": "학생회 공보국", "tags": ["moderation", "official_link"]},
+    {"id": "ORG-ELF-001", "name": "엘프 클랜", "tags": ["relay_network", "infrastructure"]},
+    {"id": "ORG-ACA-001", "name": "아카데미 교수회", "tags": ["judicial", "discipline"]},
+    {"id": "ORG-INS-001", "name": "감찰단", "tags": ["audit", "enforcement"]},
+    {"id": "ORG-MKT-001", "name": "상단 연합", "tags": ["market", "contract"]}
+  ],
+  "chars": [
+    {"id": "CHAR-MC-001", "name": "임시 주인공", "affiliations": ["ORG-ACA-001"], "main_com": "COM-PLZ-001"},
+    {"id": "CHAR-PR-001", "name": "공보국장", "affiliations": ["ORG-PR-001"], "main_com": "COM-PLZ-003"},
+    {"id": "CHAR-EL-001", "name": "중계장", "affiliations": ["ORG-ELF-001"], "main_com": "COM-PLZ-004"},
+    {"id": "CHAR-IN-001", "name": "감찰관", "affiliations": ["ORG-INS-001"], "main_com": "COM-PLZ-003"},
+    {"id": "CHAR-MK-001", "name": "상단 대리인", "affiliations": ["ORG-MKT-001"], "main_com": "COM-PLZ-004"},
+    {"id": "CHAR-ST-001", "name": "1학년 목격자", "affiliations": ["ORG-ACA-001"], "main_com": "COM-PLZ-001"},
+    {"id": "CHAR-ST-002", "name": "2학년 정리러", "affiliations": ["ORG-ACA-001"], "main_com": "COM-PLZ-001"},
+    {"id": "CHAR-ST-003", "name": "전투트랙 상위", "affiliations": ["ORG-ACA-001"], "main_com": "COM-PLZ-002"},
+    {"id": "CHAR-ST-004", "name": "치유탑 실습생", "affiliations": ["ORG-ACA-001"], "main_com": "COM-PLZ-002"},
+    {"id": "CHAR-ST-005", "name": "후원 장학생", "affiliations": ["ORG-MKT-001"], "main_com": "COM-PLZ-003"}
+  ]
+}

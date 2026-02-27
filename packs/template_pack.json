@@ -1,0 +1,25 @@
+{
+  "version": "1.0.0",
+  "thread_templates": [
+    {"id": "T1", "name": "속보 제보형", "intended_boards": ["B01", "B05"], "default_comment_flow": "P1", "crosspost_routes": ["B16"]},
+    {"id": "T2", "name": "팩트체크형", "intended_boards": ["B01", "B03"], "default_comment_flow": "P2", "crosspost_routes": ["B09"]},
+    {"id": "T3", "name": "피해호소형", "intended_boards": ["B12", "B13"], "default_comment_flow": "P3", "crosspost_routes": ["B01"]},
+    {"id": "T4", "name": "규정 논쟁형", "intended_boards": ["B11", "B03"], "default_comment_flow": "P4", "crosspost_routes": ["B17"]},
+    {"id": "T5", "name": "거래 의뢰형", "intended_boards": ["B07", "B06"], "default_comment_flow": "P5", "crosspost_routes": ["B08"]},
+    {"id": "T6", "name": "장비 리뷰형", "intended_boards": ["B06", "B04"], "default_comment_flow": "P2", "crosspost_routes": ["B07"]},
+    {"id": "T7", "name": "감정 요청형", "intended_boards": ["B09", "B08"], "default_comment_flow": "P4", "crosspost_routes": ["B11"]},
+    {"id": "T8", "name": "후원 유출형", "intended_boards": ["B10", "B14"], "default_comment_flow": "P3", "crosspost_routes": ["B01"]},
+    {"id": "T9", "name": "현장 로그형", "intended_boards": ["B05", "B04"], "default_comment_flow": "P1", "crosspost_routes": ["B01"]},
+    {"id": "T10", "name": "번역 충돌형", "intended_boards": ["B15", "B01"], "default_comment_flow": "P6", "crosspost_routes": ["B14"]},
+    {"id": "T11", "name": "풍자 리믹스형", "intended_boards": ["B16", "B01"], "default_comment_flow": "P6", "crosspost_routes": ["B17"]},
+    {"id": "T12", "name": "암거래 잠입형", "intended_boards": ["B18", "B07"], "default_comment_flow": "P5", "crosspost_routes": ["B11"]}
+  ],
+  "comment_flows": [
+    {"id": "P1", "name": "초기 목격 확산", "phases": ["early:목격자", "mid:정리러", "late:운영개입"]},
+    {"id": "P2", "name": "검증 대립", "phases": ["early:주장", "mid:반례", "late:판정"]},
+    {"id": "P3", "name": "공감 대 분노", "phases": ["early:피해", "mid:책임공방", "late:징계요구"]},
+    {"id": "P4", "name": "규정 해석전", "phases": ["early:조항인용", "mid:판례충돌", "late:항소"]},
+    {"id": "P5", "name": "거래/사기 추적", "phases": ["early:의뢰", "mid:검증", "late:블랙리스트"]},
+    {"id": "P6", "name": "밈 과열", "phases": ["early:패러디", "mid:확산", "late:봉문"]}
+  ]
+}
