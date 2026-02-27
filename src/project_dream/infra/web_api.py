@@ -55,6 +55,9 @@ class ProjectDreamAPI:
     def latest_regression_summary(self) -> dict:
         return self.repository.load_latest_regression_summary()
 
+    def get_regression_summary(self, summary_id: str) -> dict:
+        return self.repository.load_regression_summary(summary_id)
+
     def regress(
         self,
         *,

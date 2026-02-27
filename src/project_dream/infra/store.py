@@ -33,6 +33,9 @@ class RunRepository(Protocol):
     def load_latest_regression_summary(self) -> dict:
         ...
 
+    def load_regression_summary(self, summary_id: str) -> dict:
+        ...
+
 
 class FileRunRepository:
     def __init__(self, runs_dir: Path):
@@ -86,6 +89,17 @@ class FileRunRepository:
             raise FileNotFoundError(f"No regression summary found under {regressions_dir}")
 
         latest = summary_files[-1]
-        payload = json.loads(latest.read_text(encoding="utf-8"))
-        payload.setdefault("summary_path", str(latest))
+        return self.load_regression_summary(latest.name)
+
+    def load_regression_summary(self, summary_id: str) -> dict:
+        if "/" in summary_id or "\\" in summary_id:
+            raise ValueError(f"Invalid summary id: {summary_id}")
+
+        filename = summary_id if summary_id.endswith(".json") else f"{summary_id}.json"
+        path = self.runs_dir / "regressions" / filename
+        if not path.exists():
+            raise FileNotFoundError(f"Regression summary not found: {summary_id}")
+
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload.setdefault("summary_path", str(path))
         return payload

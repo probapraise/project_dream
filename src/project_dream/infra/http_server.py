@@ -39,6 +39,10 @@ def create_server(api: ProjectDreamAPI, host: str = "127.0.0.1", port: int = 800
                     return
 
                 parts = [p for p in self.path.split("/") if p]
+                if len(parts) == 2 and parts[0] == "regressions":
+                    self._send(200, api.get_regression_summary(parts[1]))
+                    return
+
                 if len(parts) == 3 and parts[0] == "runs" and parts[2] in {"report", "eval", "runlog"}:
                     run_id = parts[1]
                     if parts[2] == "report":
@@ -53,6 +57,8 @@ def create_server(api: ProjectDreamAPI, host: str = "127.0.0.1", port: int = 800
                 self._send(404, {"error": "not_found"})
             except FileNotFoundError as exc:
                 self._send(404, {"error": "not_found", "message": str(exc)})
+            except ValueError as exc:
+                self._send(400, {"error": "bad_request", "message": str(exc)})
             except Exception as exc:  # pragma: no cover - defensive
                 self._send(500, {"error": "internal_error", "message": str(exc)})
 

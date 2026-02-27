@@ -86,6 +86,18 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
         assert reg_latest["metric_set"] == "v2"
         assert reg_latest["totals"]["seed_runs"] == 3
         assert reg_latest["summary_path"].endswith(".json")
+        summary_id = Path(reg_latest["summary_path"]).name
+        summary_id_stem = summary_id.removesuffix(".json")
+
+        status, reg_by_filename = _request_json("GET", f"{base}/regressions/{summary_id}")
+        assert status == 200
+        assert reg_by_filename["schema_version"] == "regression.v1"
+        assert reg_by_filename["summary_path"].endswith(summary_id)
+
+        status, reg_by_stem = _request_json("GET", f"{base}/regressions/{summary_id_stem}")
+        assert status == 200
+        assert reg_by_stem["schema_version"] == "regression.v1"
+        assert reg_by_stem["summary_path"].endswith(summary_id)
 
         status, latest = _request_json("GET", f"{base}/runs/latest")
         assert status == 200

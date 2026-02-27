@@ -64,6 +64,28 @@ def test_web_api_latest_regression_summary(tmp_path: Path):
     assert latest_summary["summary_path"].endswith(".json")
 
 
+def test_web_api_regression_summary_by_id(tmp_path: Path):
+    repo = FileRunRepository(tmp_path / "runs")
+    api = ProjectDreamAPI(repository=repo, packs_dir=Path("packs"))
+
+    created = api.regress(
+        seeds_dir=Path("examples/seeds/regression"),
+        rounds=3,
+        max_seeds=2,
+        metric_set="v2",
+    )
+    summary_id = Path(created["summary_path"]).name
+    summary_id_stem = summary_id.removesuffix(".json")
+
+    loaded_with_filename = api.get_regression_summary(summary_id)
+    loaded_with_stem = api.get_regression_summary(summary_id_stem)
+
+    assert loaded_with_filename["schema_version"] == "regression.v1"
+    assert loaded_with_filename["metric_set"] == "v2"
+    assert loaded_with_filename["summary_path"].endswith(summary_id)
+    assert loaded_with_stem["summary_path"].endswith(summary_id)
+
+
 def test_web_api_read_endpoints(tmp_path: Path):
     repo = FileRunRepository(tmp_path / "runs")
     api = ProjectDreamAPI(repository=repo, packs_dir=Path("packs"))
