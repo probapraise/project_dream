@@ -1,5 +1,6 @@
 from collections import Counter
 
+from project_dream.llm_client import EchoLLMClient, LLMClient
 from project_dream.models import ReportConflictMap, ReportRiskCheck, ReportV1
 from project_dream.prompt_templates import render_prompt
 
@@ -58,19 +59,42 @@ def _build_conflict_map(sim_result: dict) -> ReportConflictMap:
     )
 
 
-def _build_dialogue_candidates(sim_result: dict) -> list[dict]:
+def _build_dialogue_candidates(
+    sim_result: dict,
+    llm_client: LLMClient,
+    template_set: str = "v1",
+) -> list[dict]:
     rounds = sim_result.get("rounds", [])
     candidates: list[dict] = []
     for row in rounds[:5]:
+        prompt = render_prompt(
+            "report_dialogue_candidate",
+            {
+                "text": row.get("text", ""),
+                "speaker": row.get("persona_id", "unknown"),
+                "round": row.get("round", 0),
+            },
+            template_set=template_set,
+        )
         candidates.append(
             {
                 "speaker": row.get("persona_id", "unknown"),
-                "line": row.get("text", ""),
+                "line": llm_client.generate(prompt, task="report_dialogue_candidate"),
                 "tone": "forum",
             }
         )
     while len(candidates) < 3:
+        prompt = render_prompt(
+            "report_dialogue_candidate",
+            {
+                "text": "추가 발화 필요",
+                "speaker": "system",
+                "round": 0,
+            },
+            template_set=template_set,
+        )
         candidates.append({"speaker": "system", "line": "추가 발화 필요", "tone": "neutral"})
+        candidates[-1]["line"] = llm_client.generate(prompt, task="report_dialogue_candidate")
     return candidates[:5]
 
 
@@ -135,22 +159,35 @@ def _build_risk_checks(sim_result: dict) -> list[ReportRiskCheck]:
     return risk
 
 
-def build_report_v1(seed, sim_result: dict, packs) -> dict:
+def build_report_v1(
+    seed,
+    sim_result: dict,
+    packs,
+    llm_client: LLMClient | None = None,
+    template_set: str = "v1",
+) -> dict:
+    client = llm_client if llm_client is not None else EchoLLMClient()
     round_count = len(sim_result.get("rounds", []))
+    summary_prompt = render_prompt(
+        "report_summary",
+        {
+            "title": seed.title,
+            "round_count": round_count,
+        },
+        template_set=template_set,
+    )
     report = ReportV1(
         seed_id=seed.seed_id,
         title=seed.title,
-        summary=render_prompt(
-            "report_summary",
-            {
-                "title": seed.title,
-                "round_count": round_count,
-            },
-        ),
+        summary=client.generate(summary_prompt, task="report_summary"),
         lens_summaries=_build_lens_summaries(sim_result, packs),
         highlights_top10=_build_highlights_top10(sim_result),
         conflict_map=_build_conflict_map(sim_result),
-        dialogue_candidates=_build_dialogue_candidates(sim_result),
+        dialogue_candidates=_build_dialogue_candidates(
+            sim_result,
+            llm_client=client,
+            template_set=template_set,
+        ),
         foreshadowing=_build_foreshadowing(sim_result),
         risk_checks=_build_risk_checks(sim_result),
     )

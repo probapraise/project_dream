@@ -29,3 +29,37 @@ def test_report_v1_has_required_sections_and_sizes():
     assert len(report["dialogue_candidates"]) <= 5
     assert report["foreshadowing"]
     assert report["risk_checks"]
+
+
+def test_report_v1_accepts_custom_llm_client_for_summary_and_dialogue():
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+
+        def generate(self, prompt: str, *, task: str) -> str:
+            self.calls.append({"prompt": prompt, "task": task})
+            if task == "report_summary":
+                return "FAKE REPORT SUMMARY"
+            if task == "report_dialogue_candidate":
+                return f"FAKE LINE::{prompt}"
+            return prompt
+
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    seed = SeedInput(
+        seed_id="SEED-RPT-002",
+        title="리포트 LLM 경계 검증",
+        summary="요약 대체",
+        board_id="B07",
+        zone_id="D",
+    )
+    sim_result = run_simulation(seed=seed, rounds=3, corpus=["샘플"], packs=packs)
+    fake_client = FakeClient()
+
+    report = build_report_v1(seed, sim_result, packs, llm_client=fake_client)
+
+    assert report["summary"] == "FAKE REPORT SUMMARY"
+    assert report["dialogue_candidates"]
+    assert all(item["line"].startswith("FAKE LINE::") for item in report["dialogue_candidates"])
+    assert any(call["task"] == "report_summary" for call in fake_client.calls)
+    dialogue_calls = [call for call in fake_client.calls if call["task"] == "report_dialogue_candidate"]
+    assert len(dialogue_calls) == len(report["dialogue_candidates"])

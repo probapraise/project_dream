@@ -10,6 +10,7 @@ PROMPT_TEMPLATE_REGISTRY: dict[str, dict[str, str]] = {
             "[{board_id}/{zone_id}] R{round_idx} {persona_id}: {title}에 대한 반응 - {summary}"
         ),
         "report_summary": "{title} / 라운드 {round_count}",
+        "report_dialogue_candidate": "{text}",
         "validation_lore": "requires evidence context",
     }
 }
