@@ -2,7 +2,9 @@ import argparse
 from pathlib import Path
 
 from project_dream.app_service import evaluate_and_persist, simulate_and_persist
+from project_dream.infra.http_server import serve
 from project_dream.infra.store import FileRunRepository
+from project_dream.infra.web_api import ProjectDreamAPI
 from project_dream.models import SeedInput
 from project_dream.regression_runner import run_regression_batch
 
@@ -33,6 +35,12 @@ def build_parser() -> argparse.ArgumentParser:
     reg.add_argument("--min-conflict-frame-runs", type=int, default=2)
     reg.add_argument("--min-moderation-hook-runs", type=int, default=1)
     reg.add_argument("--min-validation-warning-runs", type=int, default=1)
+
+    srv = sub.add_parser("serve")
+    srv.add_argument("--host", required=False, default="127.0.0.1")
+    srv.add_argument("--port", required=False, type=int, default=8000)
+    srv.add_argument("--runs-dir", required=False, default="runs")
+    srv.add_argument("--packs-dir", required=False, default="packs")
     return parser
 
 
@@ -71,6 +79,15 @@ def main(argv: list[str] | None = None) -> int:
             min_validation_warning_runs=args.min_validation_warning_runs,
         )
         return 0 if summary["pass_fail"] else 2
+    elif args.command == "serve":
+        api = ProjectDreamAPI.for_local_filesystem(
+            runs_dir=Path(args.runs_dir),
+            packs_dir=Path(args.packs_dir),
+        )
+        try:
+            serve(api=api, host=args.host, port=args.port)
+        except KeyboardInterrupt:
+            return 0
 
     return 0
 
