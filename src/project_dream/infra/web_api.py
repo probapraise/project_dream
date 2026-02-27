@@ -52,6 +52,9 @@ class ProjectDreamAPI:
     def get_runlog(self, run_id: str) -> dict:
         return self.repository.load_runlog(run_id)
 
+    def latest_regression_summary(self) -> dict:
+        return self.repository.load_latest_regression_summary()
+
     def regress(
         self,
         *,

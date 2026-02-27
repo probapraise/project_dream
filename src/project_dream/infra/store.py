@@ -30,6 +30,9 @@ class RunRepository(Protocol):
     def load_runlog(self, run_id: str) -> dict:
         ...
 
+    def load_latest_regression_summary(self) -> dict:
+        ...
+
 
 class FileRunRepository:
     def __init__(self, runs_dir: Path):
@@ -75,3 +78,14 @@ class FileRunRepository:
                 continue
             rows.append(json.loads(line))
         return {"run_id": run_id, "rows": rows}
+
+    def load_latest_regression_summary(self) -> dict:
+        regressions_dir = self.runs_dir / "regressions"
+        summary_files = sorted(regressions_dir.glob("regression-*.json"))
+        if not summary_files:
+            raise FileNotFoundError(f"No regression summary found under {regressions_dir}")
+
+        latest = summary_files[-1]
+        payload = json.loads(latest.read_text(encoding="utf-8"))
+        payload.setdefault("summary_path", str(latest))
+        return payload

@@ -34,6 +34,10 @@ def create_server(api: ProjectDreamAPI, host: str = "127.0.0.1", port: int = 800
                     self._send(200, api.latest_run())
                     return
 
+                if self.path == "/regressions/latest":
+                    self._send(200, api.latest_regression_summary())
+                    return
+
                 parts = [p for p in self.path.split("/") if p]
                 if len(parts) == 3 and parts[0] == "runs" and parts[2] in {"report", "eval", "runlog"}:
                     run_id = parts[1]
