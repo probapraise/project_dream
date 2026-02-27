@@ -1,13 +1,10 @@
 import argparse
 from pathlib import Path
 
-from project_dream.eval_suite import evaluate_run, find_latest_run
+from project_dream.app_service import evaluate_and_persist, simulate_and_persist
+from project_dream.infra.store import FileRunRepository
 from project_dream.models import SeedInput
-from project_dream.pack_service import load_packs
 from project_dream.regression_runner import run_regression_batch
-from project_dream.report_generator import build_report_v1
-from project_dream.sim_orchestrator import run_simulation
-from project_dream.storage import persist_eval, persist_run
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -46,15 +43,20 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "simulate":
         seed_path = Path(args.seed)
         seed = SeedInput.model_validate_json(seed_path.read_text(encoding="utf-8"))
-        packs = load_packs(Path(args.packs_dir), enforce_phase1_minimums=True)
-        sim_result = run_simulation(seed=seed, rounds=args.rounds, corpus=[], packs=packs)
-        report = build_report_v1(seed, sim_result, packs)
-        persist_run(Path(args.output_dir), sim_result, report)
+        repository = FileRunRepository(Path(args.output_dir))
+        simulate_and_persist(
+            seed,
+            rounds=args.rounds,
+            packs_dir=Path(args.packs_dir),
+            repository=repository,
+        )
     elif args.command == "evaluate":
-        runs_dir = Path(args.runs_dir)
-        run_dir = runs_dir / args.run_id if args.run_id else find_latest_run(runs_dir)
-        eval_result = evaluate_run(run_dir, metric_set=args.metric_set)
-        persist_eval(run_dir, eval_result)
+        repository = FileRunRepository(Path(args.runs_dir))
+        evaluate_and_persist(
+            repository=repository,
+            run_id=args.run_id,
+            metric_set=args.metric_set,
+        )
     elif args.command == "regress":
         summary = run_regression_batch(
             seeds_dir=Path(args.seeds_dir),
