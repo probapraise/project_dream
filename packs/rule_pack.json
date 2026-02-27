@@ -1,0 +1,20 @@
+{
+  "version": "1.0.0",
+  "rules": [
+    {"id": "RULE-REC-01", "name": "정본 성립 규칙", "category": "evidence", "summary": "정본 번호 부여 시 공식 효력"},
+    {"id": "RULE-MANA-01", "name": "마나사인 TTL", "category": "evidence", "summary": "시간 경과 시 증거력 하락"},
+    {"id": "RULE-PLZ-UI-01", "name": "노출 점수", "category": "platform", "summary": "추천/댓글/열람/보존권/신고 반영"},
+    {"id": "RULE-PLZ-MOD-01", "name": "신고 임계 가리기", "category": "moderation", "summary": "임계치 초과 시 임시 가리기"},
+    {"id": "RULE-PLZ-MOD-02", "name": "봉문 규칙", "category": "moderation", "summary": "봉문 상태에서는 신규 댓글 차단"},
+    {"id": "RULE-PLZ-MOD-03", "name": "유령처리 규칙", "category": "moderation", "summary": "검색/정렬 제외, 직접 링크 접근 허용"},
+    {"id": "RULE-PLZ-ACC-01", "name": "계정 유형", "category": "account", "summary": "정규/별칭/가면 계정 차등"},
+    {"id": "RULE-PLZ-ACC-02", "name": "익명 비용", "category": "account", "summary": "익명일수록 비용 증가, 노출 하락"},
+    {"id": "RULE-PLZ-SAN-01", "name": "제재 레벨", "category": "sanction", "summary": "L1~L5 제재 체계"},
+    {"id": "RULE-PLZ-SAN-02", "name": "항소 프로토콜", "category": "sanction", "summary": "증거 제출 기반 재심"},
+    {"id": "RULE-PLZ-DEL-01", "name": "삭제 인장", "category": "audit", "summary": "삭제 후에도 흔적 보존"},
+    {"id": "RULE-PLZ-EV-01", "name": "증거 등급", "category": "evidence", "summary": "DOC/LOG/THREAD/SIGN 등급 차등"},
+    {"id": "RULE-PLZ-TABOO-01", "name": "실명 금지", "category": "safety", "summary": "실명/식별자 노출 금지"},
+    {"id": "RULE-PLZ-TABOO-02", "name": "서명 단서 금지", "category": "safety", "summary": "서명 추적 단서 노출 금지"},
+    {"id": "RULE-PLZ-TABOO-03", "name": "사망 조롱 금지", "category": "safety", "summary": "사망/중상 희화 금지"}
+  ]
+}

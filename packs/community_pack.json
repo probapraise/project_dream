@@ -1,0 +1,45 @@
+{
+  "version": "1.0.0",
+  "communities": [
+    {
+      "id": "COM-PLZ-001",
+      "name": "첫마루 렌즈",
+      "board_id": "B01",
+      "zone_id": "A",
+      "identity": ["crowd", "frame", "instant_trial"],
+      "preferred_evidence": ["DOC", "LOG", "THREAD"],
+      "taboos": ["signature_dox", "realname_dox"],
+      "biases": ["요약러 우대", "속도 우선"]
+    },
+    {
+      "id": "COM-PLZ-002",
+      "name": "연무벽 렌즈",
+      "board_id": "B04",
+      "zone_id": "B",
+      "identity": ["speed", "mock", "pragmatic"],
+      "preferred_evidence": ["LOG", "THREAD"],
+      "taboos": ["injury_dox", "doping_claim_no_proof"],
+      "biases": ["실전 우선", "감정 과열"]
+    },
+    {
+      "id": "COM-PLZ-003",
+      "name": "후원살롱 렌즈",
+      "board_id": "B10",
+      "zone_id": "C",
+      "identity": ["prestige", "code", "trade"],
+      "preferred_evidence": ["DOC", "SIGN"],
+      "taboos": ["family_secret", "leak_to_public"],
+      "biases": ["완곡 화법", "체면 우선"]
+    },
+    {
+      "id": "COM-PLZ-004",
+      "name": "장터기둥 렌즈",
+      "board_id": "B07",
+      "zone_id": "D",
+      "identity": ["market", "intent", "asymmetry"],
+      "preferred_evidence": ["THREAD", "LOG"],
+      "taboos": ["illegal_trade", "fake_review"],
+      "biases": ["이익 우선", "정보 비대칭"]
+    }
+  ]
+}
