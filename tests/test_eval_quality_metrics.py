@@ -57,12 +57,30 @@ def test_eval_quality_v1_metrics_are_present_and_bounded(tmp_path: Path):
     assert 0.0 <= result["metrics"]["community_dispersion"] <= 1.0
 
 
+def test_eval_quality_v2_metrics_include_v1_and_new_metrics(tmp_path: Path):
+    run_dir = tmp_path / "runs" / "run-quality-v2"
+    _write_quality_run(run_dir)
+
+    result = evaluate_run(run_dir, metric_set="v2")
+
+    assert result["metric_set"] == "v2"
+    assert "moderation_intervention_rate" in result["metrics"]
+    assert "gate_rewrite_rate" in result["metrics"]
+    assert "community_dispersion" in result["metrics"]
+    assert "lore_pass_rate" in result["metrics"]
+    assert "moderation_escalation_depth" in result["metrics"]
+    assert "dialogue_speaker_diversity" in result["metrics"]
+    assert 0.0 <= result["metrics"]["lore_pass_rate"] <= 1.0
+    assert 0.0 <= result["metrics"]["moderation_escalation_depth"] <= 1.0
+    assert 0.0 <= result["metrics"]["dialogue_speaker_diversity"] <= 1.0
+
+
 def test_eval_quality_unknown_metric_set_raises(tmp_path: Path):
     run_dir = tmp_path / "runs" / "run-quality-unknown"
     _write_quality_run(run_dir)
 
     try:
-        evaluate_run(run_dir, metric_set="v2")
+        evaluate_run(run_dir, metric_set="v99")
     except ValueError as exc:
         assert "Unknown metric_set" in str(exc)
     else:

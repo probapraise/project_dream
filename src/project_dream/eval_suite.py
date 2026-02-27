@@ -54,8 +54,50 @@ def _quality_metrics_v1(runlog_rows: list[dict], report: dict) -> dict[str, floa
     }
 
 
+def _quality_metrics_v2(runlog_rows: list[dict], report: dict) -> dict[str, float]:
+    metrics = dict(_quality_metrics_v1(runlog_rows, report))
+
+    gate_rows = [row for row in runlog_rows if row.get("type") == "gate"]
+    lore_total = 0
+    lore_passed = 0
+    for row in gate_rows:
+        for gate in row.get("gates", []):
+            if gate.get("gate_name") != "lore":
+                continue
+            lore_total += 1
+            lore_passed += int(bool(gate.get("passed")))
+    lore_pass_rate = lore_passed / max(1, lore_total)
+
+    action_rows = [row for row in runlog_rows if row.get("type") == "action"]
+    depth_map = {
+        "HIDE_PREVIEW": 0.25,
+        "LOCK_THREAD": 0.5,
+        "GHOST_THREAD": 0.75,
+        "SANCTION_USER": 1.0,
+    }
+    moderation_escalation_depth = 0.0
+    for row in action_rows:
+        action_type = row.get("action_type")
+        moderation_escalation_depth = max(moderation_escalation_depth, depth_map.get(action_type, 0.0))
+
+    dialogue = report.get("dialogue_candidates", [])
+    dialogue_count = len(dialogue)
+    unique_speakers = len({item.get("speaker") for item in dialogue if item.get("speaker")})
+    dialogue_speaker_diversity = unique_speakers / max(1, dialogue_count)
+
+    metrics.update(
+        {
+            "lore_pass_rate": float(round(lore_pass_rate, 4)),
+            "moderation_escalation_depth": float(round(moderation_escalation_depth, 4)),
+            "dialogue_speaker_diversity": float(round(dialogue_speaker_diversity, 4)),
+        }
+    )
+    return metrics
+
+
 METRIC_SET_REGISTRY = {
     "v1": _quality_metrics_v1,
+    "v2": _quality_metrics_v2,
 }
 
 
