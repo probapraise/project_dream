@@ -1,11 +1,12 @@
 import argparse
 from pathlib import Path
 
+from project_dream.eval_suite import evaluate_run, find_latest_run
 from project_dream.models import SeedInput
 from project_dream.pack_service import load_packs
 from project_dream.report_generator import build_report_v1
 from project_dream.sim_orchestrator import run_simulation
-from project_dream.storage import persist_run
+from project_dream.storage import persist_eval, persist_run
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -17,6 +18,10 @@ def build_parser() -> argparse.ArgumentParser:
     sim.add_argument("--packs-dir", required=False, default="packs")
     sim.add_argument("--output-dir", required=False, default="runs")
     sim.add_argument("--rounds", type=int, default=3)
+
+    eva = sub.add_parser("evaluate")
+    eva.add_argument("--runs-dir", required=False, default="runs")
+    eva.add_argument("--run-id", required=False, default=None)
     return parser
 
 
@@ -31,6 +36,11 @@ def main(argv: list[str] | None = None) -> int:
         sim_result = run_simulation(seed=seed, rounds=args.rounds, corpus=[], packs=packs)
         report = build_report_v1(seed, sim_result, packs)
         persist_run(Path(args.output_dir), sim_result, report)
+    elif args.command == "evaluate":
+        runs_dir = Path(args.runs_dir)
+        run_dir = runs_dir / args.run_id if args.run_id else find_latest_run(runs_dir)
+        eval_result = evaluate_run(run_dir)
+        persist_eval(run_dir, eval_result)
 
     return 0
 

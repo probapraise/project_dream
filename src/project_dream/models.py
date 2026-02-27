@@ -49,3 +49,18 @@ class ReportV1(BaseModel):
     dialogue_candidates: list[dict]
     foreshadowing: list[str]
     risk_checks: list[ReportRiskCheck]
+
+
+class EvalCheck(BaseModel):
+    name: str
+    passed: bool
+    details: str
+
+
+class EvalResult(BaseModel):
+    schema_version: str = "eval.v1"
+    run_id: str
+    seed_id: str
+    pass_fail: bool
+    checks: list[EvalCheck]
+    metrics: dict[str, int | float]

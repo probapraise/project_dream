@@ -71,3 +71,9 @@ def persist_run(output_dir: Path, sim_result: dict, report: dict) -> Path:
     )
     (run_dir / "report.md").write_text(render_report_markdown(report), encoding="utf-8")
     return run_dir
+
+
+def persist_eval(run_dir: Path, eval_result: dict) -> Path:
+    output = run_dir / "eval.json"
+    output.write_text(json.dumps(eval_result, ensure_ascii=False, indent=2), encoding="utf-8")
+    return output
