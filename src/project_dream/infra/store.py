@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 from typing import Protocol
 
 from project_dream.eval_suite import find_latest_run
@@ -20,6 +21,12 @@ class RunRepository(Protocol):
     def get_run(self, run_id: str) -> Path:
         ...
 
+    def load_report(self, run_id: str) -> dict:
+        ...
+
+    def load_eval(self, run_id: str) -> dict:
+        ...
+
 
 class FileRunRepository:
     def __init__(self, runs_dir: Path):
@@ -39,3 +46,17 @@ class FileRunRepository:
         if not run_dir.exists():
             raise FileNotFoundError(f"Run not found: {run_id}")
         return run_dir
+
+    def load_report(self, run_id: str) -> dict:
+        run_dir = self.get_run(run_id)
+        path = run_dir / "report.json"
+        if not path.exists():
+            raise FileNotFoundError(f"Report not found for run: {run_id}")
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def load_eval(self, run_id: str) -> dict:
+        run_dir = self.get_run(run_id)
+        path = run_dir / "eval.json"
+        if not path.exists():
+            raise FileNotFoundError(f"Eval not found for run: {run_id}")
+        return json.loads(path.read_text(encoding="utf-8"))

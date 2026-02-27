@@ -44,3 +44,28 @@ def test_web_api_regress(tmp_path: Path):
     assert summary["schema_version"] == "regression.v1"
     assert summary["metric_set"] == "v2"
     assert summary["totals"]["seed_runs"] == 3
+
+
+def test_web_api_read_endpoints(tmp_path: Path):
+    repo = FileRunRepository(tmp_path / "runs")
+    api = ProjectDreamAPI(repository=repo, packs_dir=Path("packs"))
+
+    sim_res = api.simulate(
+        {
+            "seed_id": "SEED-API-READ-001",
+            "title": "api read",
+            "summary": "api read summary",
+            "board_id": "B07",
+            "zone_id": "D",
+        },
+        rounds=3,
+    )
+    api.evaluate(run_id=sim_res["run_id"], metric_set="v2")
+
+    latest = api.latest_run()
+    report = api.get_report(sim_res["run_id"])
+    eva = api.get_eval(sim_res["run_id"])
+
+    assert latest["run_id"] == sim_res["run_id"]
+    assert report["schema_version"] == "report.v1"
+    assert eva["schema_version"] == "eval.v1"

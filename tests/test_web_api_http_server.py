@@ -79,6 +79,19 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
         assert status == 200
         assert reg["schema_version"] == "regression.v1"
         assert reg["totals"]["seed_runs"] == 3
+
+        status, latest = _request_json("GET", f"{base}/runs/latest")
+        assert status == 200
+        known_run_ids = {sim["run_id"], *[row["run_id"] for row in reg["runs"]]}
+        assert latest["run_id"] in known_run_ids
+
+        status, report = _request_json("GET", f"{base}/runs/{sim['run_id']}/report")
+        assert status == 200
+        assert report["schema_version"] == "report.v1"
+
+        status, eval_payload = _request_json("GET", f"{base}/runs/{sim['run_id']}/eval")
+        assert status == 200
+        assert eval_payload["schema_version"] == "eval.v1"
     finally:
         server.shutdown()
         server.server_close()

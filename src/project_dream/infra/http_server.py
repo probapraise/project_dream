@@ -25,10 +25,29 @@ def create_server(api: ProjectDreamAPI, host: str = "127.0.0.1", port: int = 800
             return json.loads(raw.decode("utf-8"))
 
         def do_GET(self) -> None:  # noqa: N802
-            if self.path != "/health":
+            try:
+                if self.path == "/health":
+                    self._send(200, api.health())
+                    return
+
+                if self.path == "/runs/latest":
+                    self._send(200, api.latest_run())
+                    return
+
+                parts = [p for p in self.path.split("/") if p]
+                if len(parts) == 3 and parts[0] == "runs" and parts[2] in {"report", "eval"}:
+                    run_id = parts[1]
+                    if parts[2] == "report":
+                        self._send(200, api.get_report(run_id))
+                        return
+                    self._send(200, api.get_eval(run_id))
+                    return
+
                 self._send(404, {"error": "not_found"})
-                return
-            self._send(200, api.health())
+            except FileNotFoundError as exc:
+                self._send(404, {"error": "not_found", "message": str(exc)})
+            except Exception as exc:  # pragma: no cover - defensive
+                self._send(500, {"error": "internal_error", "message": str(exc)})
 
         def do_POST(self) -> None:  # noqa: N802
             try:
