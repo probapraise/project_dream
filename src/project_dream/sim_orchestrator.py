@@ -1,4 +1,4 @@
-from project_dream.env_engine import apply_report_threshold, compute_score
+from project_dream.env_engine import apply_policy_transition, compute_score
 from project_dream.gen_engine import generate_comment
 from project_dream.gate_pipeline import run_gates
 from project_dream.persona_service import select_participants
@@ -74,8 +74,17 @@ def run_simulation(
                 reports=total_reports,
                 trust=1,
             )
-            prev_status = status
-            status = apply_report_threshold(status=status, reports=total_reports, threshold=10)
+            severity = 0
+            if report_delta >= 3:
+                severity = 2
+            if report_delta >= 5:
+                severity = 3
+            status, transition_event = apply_policy_transition(
+                status=status,
+                reports=total_reports,
+                severity=severity,
+                appeal=False,
+            )
 
             round_logs.append(
                 {
@@ -111,13 +120,16 @@ def run_simulation(
                         "total_reports": total_reports,
                     }
                 )
-            if prev_status != status:
+            if transition_event["action_type"] != "NO_OP":
                 action_logs.append(
                     {
                         "round": round_idx,
-                        "action_type": "HIDE_PREVIEW",
+                        "action_type": transition_event["action_type"],
                         "actor_id": "system",
                         "target_id": seed.seed_id,
+                        "prev_status": transition_event["prev_status"],
+                        "next_status": transition_event["next_status"],
+                        "reason_rule_id": transition_event["reason_rule_id"],
                         "status": status,
                     }
                 )
