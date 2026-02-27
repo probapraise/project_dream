@@ -11,7 +11,11 @@ def persist_run(output_dir: Path, sim_result: dict, report: dict) -> Path:
 
     with (run_dir / "runlog.jsonl").open("w", encoding="utf-8") as fp:
         for row in sim_result["rounds"]:
-            fp.write(json.dumps(row, ensure_ascii=False) + "\n")
+            fp.write(json.dumps({"type": "round", **row}, ensure_ascii=False) + "\n")
+        for row in sim_result.get("gate_logs", []):
+            fp.write(json.dumps({"type": "gate", **row}, ensure_ascii=False) + "\n")
+        for row in sim_result.get("action_logs", []):
+            fp.write(json.dumps({"type": "action", **row}, ensure_ascii=False) + "\n")
 
     (run_dir / "report.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"

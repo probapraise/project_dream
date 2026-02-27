@@ -31,5 +31,11 @@ def test_cli_simulate_writes_run_outputs(tmp_path: Path):
         ]
     )
     assert rc == 0
-    assert any((tmp_path / "runs").glob("*/runlog.jsonl"))
+    runlogs = list((tmp_path / "runs").glob("*/runlog.jsonl"))
+    assert runlogs
     assert any((tmp_path / "runs").glob("*/report.md"))
+
+    runlog_path = runlogs[0]
+    rows = [json.loads(line) for line in runlog_path.read_text(encoding="utf-8").splitlines()]
+    assert any(row.get("type") == "round" and "community_id" in row for row in rows)
+    assert any(row.get("type") == "action" for row in rows)
