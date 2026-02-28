@@ -28,6 +28,8 @@ BASELINE_FILE="${PROJECT_DREAM_LIVE_BASELINE_FILE:-runs/regressions/regress-live
 ALLOWED_RATE_DROP="${PROJECT_DREAM_LIVE_ALLOWED_RATE_DROP:-0.05}"
 ALLOWED_COMMUNITY_DROP="${PROJECT_DREAM_LIVE_ALLOWED_COMMUNITY_DROP:-1}"
 UPDATE_BASELINE="${PROJECT_DREAM_LIVE_UPDATE_BASELINE:-0}"
+VECTOR_BACKEND="${PROJECT_DREAM_LIVE_VECTOR_BACKEND:-${PROJECT_DREAM_VECTOR_BACKEND:-memory}}"
+VECTOR_DB_PATH="${PROJECT_DREAM_LIVE_VECTOR_DB_PATH:-${PROJECT_DREAM_VECTOR_DB_PATH:-}}"
 
 if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
   PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
@@ -39,20 +41,31 @@ fi
 
 cd "$ROOT_DIR"
 export PYTHONPATH="$ROOT_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
-exec "$PYTHON_BIN" -m project_dream.cli regress-live \
-  --seeds-dir "$SEEDS_DIR" \
-  --packs-dir "$PACKS_DIR" \
-  --output-dir "$OUTPUT_DIR" \
-  --rounds "$ROUNDS" \
-  --max-seeds "$MAX_SEEDS" \
-  --metric-set "$METRIC_SET" \
-  --min-community-coverage "$MIN_COMMUNITY_COVERAGE" \
-  --min-conflict-frame-runs "$MIN_CONFLICT_FRAME_RUNS" \
-  --min-moderation-hook-runs "$MIN_MODERATION_HOOK_RUNS" \
-  --min-validation-warning-runs "$MIN_VALIDATION_WARNING_RUNS" \
-  --llm-model "$LLM_MODEL" \
-  --llm-timeout-sec "$LLM_TIMEOUT_SEC" \
-  --baseline-file "$BASELINE_FILE" \
-  --allowed-rate-drop "$ALLOWED_RATE_DROP" \
-  --allowed-community-drop "$ALLOWED_COMMUNITY_DROP" \
-  $([[ "$UPDATE_BASELINE" == "1" ]] && printf '%s' "--update-baseline")
+
+cmd=(
+  "$PYTHON_BIN" -m project_dream.cli regress-live
+  --seeds-dir "$SEEDS_DIR"
+  --packs-dir "$PACKS_DIR"
+  --output-dir "$OUTPUT_DIR"
+  --rounds "$ROUNDS"
+  --max-seeds "$MAX_SEEDS"
+  --metric-set "$METRIC_SET"
+  --min-community-coverage "$MIN_COMMUNITY_COVERAGE"
+  --min-conflict-frame-runs "$MIN_CONFLICT_FRAME_RUNS"
+  --min-moderation-hook-runs "$MIN_MODERATION_HOOK_RUNS"
+  --min-validation-warning-runs "$MIN_VALIDATION_WARNING_RUNS"
+  --llm-model "$LLM_MODEL"
+  --llm-timeout-sec "$LLM_TIMEOUT_SEC"
+  --baseline-file "$BASELINE_FILE"
+  --allowed-rate-drop "$ALLOWED_RATE_DROP"
+  --allowed-community-drop "$ALLOWED_COMMUNITY_DROP"
+  --vector-backend "$VECTOR_BACKEND"
+)
+if [[ -n "$VECTOR_DB_PATH" ]]; then
+  cmd+=(--vector-db-path "$VECTOR_DB_PATH")
+fi
+if [[ "$UPDATE_BASELINE" == "1" ]]; then
+  cmd+=(--update-baseline)
+fi
+
+exec "${cmd[@]}"

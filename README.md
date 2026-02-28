@@ -40,6 +40,11 @@ cp .env.example .env
 - `PROJECT_DREAM_VECTOR_DB_PATH=<path>` (sqlite 선택 시 권장)
 
 CLI(`simulate/regress/regress-live/serve`)에서 벡터 옵션을 명시하지 않으면 위 환경변수 기본값을 사용합니다.
+추가로 운영 스크립트도 같은 설정을 사용합니다.
+
+- `scripts/dev_serve.sh`: `PROJECT_DREAM_VECTOR_BACKEND`, `PROJECT_DREAM_VECTOR_DB_PATH`
+- `scripts/regress_live.sh`: `PROJECT_DREAM_LIVE_VECTOR_BACKEND`, `PROJECT_DREAM_LIVE_VECTOR_DB_PATH`
+- `scripts/smoke_api.sh`: `PROJECT_DREAM_SMOKE_VECTOR_SQLITE_CHECK=1`일 때 sqlite 벡터 모드 추가 점검
 
 ### Corpus Build (Ingest)
 
