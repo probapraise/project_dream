@@ -98,6 +98,10 @@ def create_server(
                     return
 
                 parts = [p for p in path.split("/") if p]
+                if len(parts) == 3 and parts[0] == "packs":
+                    self._send(200, api.get_pack_item(parts[1], parts[2]))
+                    return
+
                 if len(parts) == 2 and parts[0] == "regressions":
                     self._send(200, api.get_regression_summary(parts[1]))
                     return
@@ -167,6 +171,32 @@ def create_server(
                         min_conflict_frame_runs=int(body.get("min_conflict_frame_runs", 2)),
                         min_moderation_hook_runs=int(body.get("min_moderation_hook_runs", 1)),
                         min_validation_warning_runs=int(body.get("min_validation_warning_runs", 1)),
+                    )
+                    self._send(200, payload)
+                    return
+
+                if path == "/kb/search":
+                    payload = api.search_knowledge(
+                        query=body.get("query", ""),
+                        filters=body.get("filters", {}),
+                        top_k=int(body.get("top_k", 5)),
+                    )
+                    self._send(200, payload)
+                    return
+
+                if path == "/kb/context":
+                    required = ["task", "seed", "board_id", "zone_id"]
+                    missing = [key for key in required if not body.get(key)]
+                    if missing:
+                        raise ValueError(f"Missing required fields: {', '.join(missing)}")
+
+                    payload = api.retrieve_context_bundle(
+                        task=body["task"],
+                        seed=body["seed"],
+                        board_id=body["board_id"],
+                        zone_id=body["zone_id"],
+                        persona_ids=body.get("persona_ids", []),
+                        top_k=int(body.get("top_k", 3)),
                     )
                     self._send(200, payload)
                     return

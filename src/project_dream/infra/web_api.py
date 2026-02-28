@@ -1,8 +1,10 @@
 from pathlib import Path
 
 from project_dream.app_service import evaluate_and_persist, regress_and_persist, simulate_and_persist
+from project_dream.kb_index import build_index, get_pack_item as kb_get_pack_item, retrieve_context, search
 from project_dream.infra.store import FileRunRepository, RunRepository
 from project_dream.models import SeedInput
+from project_dream.pack_service import load_packs
 
 
 class ProjectDreamAPI:
@@ -84,4 +86,43 @@ class ProjectDreamAPI:
             min_conflict_frame_runs=min_conflict_frame_runs,
             min_moderation_hook_runs=min_moderation_hook_runs,
             min_validation_warning_runs=min_validation_warning_runs,
+        )
+
+    def _build_kb_index(self) -> dict:
+        packs = load_packs(self.packs_dir, enforce_phase1_minimums=True)
+        return build_index(packs)
+
+    def search_knowledge(
+        self, *, query: str, filters: dict | None = None, top_k: int = 5
+    ) -> dict:
+        index = self._build_kb_index()
+        items = search(index, query=query, filters=filters or {}, top_k=top_k)
+        return {"count": len(items), "items": items}
+
+    def get_pack_item(self, pack: str, item_id: str) -> dict:
+        index = self._build_kb_index()
+        item = kb_get_pack_item(index, pack, item_id)
+        if item is None:
+            raise FileNotFoundError(f"Pack item not found: {pack}/{item_id}")
+        return item
+
+    def retrieve_context_bundle(
+        self,
+        *,
+        task: str,
+        seed: str,
+        board_id: str,
+        zone_id: str,
+        persona_ids: list[str] | None = None,
+        top_k: int = 3,
+    ) -> dict:
+        index = self._build_kb_index()
+        return retrieve_context(
+            index,
+            task=task,
+            seed=seed,
+            board_id=board_id,
+            zone_id=zone_id,
+            persona_ids=persona_ids or [],
+            top_k=top_k,
         )

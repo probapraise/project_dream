@@ -145,3 +145,33 @@ def test_web_api_read_endpoints(tmp_path: Path):
     assert eva["schema_version"] == "eval.v1"
     assert runlog["run_id"] == sim_res["run_id"]
     assert runlog["rows"]
+
+
+def test_web_api_kb_query_methods(tmp_path: Path):
+    repo = FileRunRepository(tmp_path / "runs")
+    api = ProjectDreamAPI(repository=repo, packs_dir=Path("packs"))
+
+    searched = api.search_knowledge(
+        query="illegal_trade",
+        filters={"kind": "board", "board_id": "B07"},
+        top_k=3,
+    )
+    assert searched["count"] >= 1
+    assert searched["items"][0]["item_id"] == "B07"
+
+    board = api.get_pack_item("board", "B07")
+    assert board["id"] == "B07"
+    assert board["name"] == "장터기둥"
+
+    ctx = api.retrieve_context_bundle(
+        task="거래 사기 의혹",
+        seed="중계망 장애",
+        board_id="B07",
+        zone_id="D",
+        persona_ids=["P07"],
+        top_k=2,
+    )
+    assert "bundle" in ctx
+    assert "corpus" in ctx
+    assert ctx["bundle"]["board_id"] == "B07"
+    assert ctx["corpus"]

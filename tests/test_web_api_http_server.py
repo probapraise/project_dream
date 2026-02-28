@@ -190,6 +190,42 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
         assert status == 200
         assert runlog["run_id"] == sim["run_id"]
         assert runlog["rows"]
+
+        status, kb_search = _request_json(
+            "POST",
+            f"{base}/kb/search",
+            {
+                "query": "illegal_trade",
+                "filters": {"kind": "board", "board_id": "B07"},
+                "top_k": 3,
+            },
+            headers=auth,
+        )
+        assert status == 200
+        assert kb_search["count"] >= 1
+        assert kb_search["items"][0]["item_id"] == "B07"
+
+        status, kb_context = _request_json(
+            "POST",
+            f"{base}/kb/context",
+            {
+                "task": "거래 사기 의혹",
+                "seed": "중계망 장애",
+                "board_id": "B07",
+                "zone_id": "D",
+                "persona_ids": ["P07"],
+                "top_k": 2,
+            },
+            headers=auth,
+        )
+        assert status == 200
+        assert kb_context["bundle"]["board_id"] == "B07"
+        assert kb_context["corpus"]
+
+        status, pack_item = _request_json("GET", f"{base}/packs/board/B07", headers=auth)
+        assert status == 200
+        assert pack_item["id"] == "B07"
+        assert pack_item["name"] == "장터기둥"
     finally:
         server.shutdown()
         server.server_close()
