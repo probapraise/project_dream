@@ -9,6 +9,7 @@ def generate_comment(
     round_idx: int,
     llm_client: LLMClient | None = None,
     template_set: str = "v1",
+    memory_hint: str | None = None,
 ) -> str:
     prompt = render_prompt(
         "comment_generation",
@@ -22,5 +23,7 @@ def generate_comment(
         },
         template_set=template_set,
     )
+    if memory_hint:
+        prompt = f"{prompt} | memory={memory_hint}"
     client = llm_client if llm_client is not None else EchoLLMClient()
     return client.generate(prompt, task="comment_generation")

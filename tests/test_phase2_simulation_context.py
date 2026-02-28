@@ -39,8 +39,8 @@ def test_simulation_emits_policy_transition_event_fields():
         zone_id="D",
     )
 
-    # 4 rounds x 3 participants -> enough reports to cross hidden threshold.
-    result = run_simulation(seed=seed, rounds=4, corpus=["샘플"], packs=packs)
+    # max_retries=0 + 5라운드로 누적 신고를 hidden 임계치(10) 이상으로 올린다.
+    result = run_simulation(seed=seed, rounds=5, corpus=["샘플"], max_retries=0, packs=packs)
     transitions = [
         row
         for row in result["action_logs"]

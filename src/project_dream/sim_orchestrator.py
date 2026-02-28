@@ -29,6 +29,20 @@ def _select_template(seed, packs) -> tuple[str, str]:
     return "T1", "P1"
 
 
+def _memory_summary(entries: list[str], *, max_items: int = 2, max_chars: int = 140) -> str:
+    if not entries:
+        return ""
+    text = " / ".join(entries[-max_items:])
+    return text[:max_chars]
+
+
+def _sanitize_for_memory(text: str) -> str:
+    # Keep only user-facing utterance, excluding system-added hints/rewrites.
+    base = text.split(" | memory=", 1)[0]
+    base = base.replace(" / 근거(정본/증거/로그) 기준 추가 필요", "")
+    return base.strip()
+
+
 def run_simulation(
     seed,
     rounds: int,
@@ -39,6 +53,7 @@ def run_simulation(
     round_logs: list[dict] = []
     gate_logs: list[dict] = []
     action_logs: list[dict] = []
+    persona_memory: dict[str, list[str]] = {}
     community_id = _select_community_id(seed, packs)
     template_id, flow_id = _select_template(seed, packs)
 
@@ -50,7 +65,14 @@ def run_simulation(
         participants = select_participants(seed, round_idx=round_idx, packs=packs)[:3]
 
         for idx, persona_id in enumerate(participants):
-            text = generate_comment(seed, persona_id, round_idx=round_idx)
+            before_entries = persona_memory.get(persona_id, [])
+            memory_before = _memory_summary(before_entries)
+            text = generate_comment(
+                seed,
+                persona_id,
+                round_idx=round_idx,
+                memory_hint=memory_before,
+            )
             last = None
             total_failed_in_attempts = 0
 
@@ -86,6 +108,11 @@ def run_simulation(
                 appeal=False,
             )
 
+            memory_entries = persona_memory.setdefault(persona_id, [])
+            memory_source = _sanitize_for_memory(last["final_text"])
+            memory_entries.append(f"R{round_idx}:{memory_source[:80]}")
+            memory_after = _memory_summary(memory_entries)
+
             round_logs.append(
                 {
                     "round": round_idx,
@@ -97,6 +124,8 @@ def run_simulation(
                     "status": status,
                     "score": score,
                     "text": last["final_text"],
+                    "memory_before": memory_before,
+                    "memory_after": memory_after,
                 }
             )
             gate_logs.append({"round": round_idx, "persona_id": persona_id, "gates": last["gates"]})
@@ -138,6 +167,7 @@ def run_simulation(
         "rounds": round_logs,
         "gate_logs": gate_logs,
         "action_logs": action_logs,
+        "persona_memory": persona_memory,
         "thread_state": {
             "board_id": seed.board_id,
             "community_id": community_id,

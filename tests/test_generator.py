@@ -29,3 +29,27 @@ def test_generator_accepts_custom_llm_client():
     assert len(client.calls) == 1
     assert client.calls[0]["task"] == "comment_generation"
     assert "[B07/D] R2 P-777" in client.calls[0]["prompt"]
+
+
+def test_generator_includes_memory_hint_when_provided():
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+
+        def generate(self, prompt: str, *, task: str) -> str:
+            self.calls.append({"prompt": prompt, "task": task})
+            return prompt
+
+    seed = SeedInput(seed_id="SEED-003", title="사건3", summary="요약3", board_id="B03", zone_id="B")
+    client = FakeClient()
+
+    output = generate_comment(
+        seed,
+        "P-101",
+        round_idx=3,
+        llm_client=client,
+        memory_hint="R2: 이전에는 근거 링크를 먼저 요구했다",
+    )
+
+    assert "memory=R2: 이전에는 근거 링크를 먼저 요구했다" in output
+    assert len(client.calls) == 1
