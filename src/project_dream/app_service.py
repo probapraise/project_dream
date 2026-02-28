@@ -2,6 +2,7 @@ from pathlib import Path
 
 from project_dream.eval_suite import evaluate_run
 from project_dream.infra.store import RunRepository
+from project_dream.kb_index import build_index, retrieve_context
 from project_dream.models import SeedInput
 from project_dream.pack_service import load_packs
 from project_dream.regression_runner import run_regression_batch
@@ -17,7 +18,17 @@ def simulate_and_persist(
     repository: RunRepository,
 ) -> Path:
     packs = load_packs(packs_dir, enforce_phase1_minimums=True)
-    sim_result = run_simulation(seed=seed, rounds=rounds, corpus=[], packs=packs)
+    index = build_index(packs)
+    context = retrieve_context(
+        index,
+        task=f"{seed.title} {seed.summary}",
+        seed=seed.summary,
+        board_id=seed.board_id,
+        zone_id=seed.zone_id,
+        persona_ids=[],
+        top_k=3,
+    )
+    sim_result = run_simulation(seed=seed, rounds=rounds, corpus=context["corpus"], packs=packs)
     report = build_report_v1(seed, sim_result, packs)
     return repository.persist_run(sim_result, report)
 
