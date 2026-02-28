@@ -13,6 +13,45 @@ def _write_valid_run(run_dir: Path) -> None:
             "bundle": {"board_id": "B01", "zone_id": "A"},
             "corpus": ["ctx-1"],
         },
+        {
+            "type": "thread_candidate",
+            "candidate_id": "TC-1",
+            "thread_template_id": "T1",
+            "comment_flow_id": "P1",
+            "score": 0.9,
+        },
+        {
+            "type": "thread_selected",
+            "candidate_id": "TC-1",
+            "thread_template_id": "T1",
+            "comment_flow_id": "P1",
+            "score": 0.9,
+        },
+        {
+            "type": "round_summary",
+            "round": 1,
+            "participant_count": 1,
+            "report_events": 1,
+            "policy_events": 0,
+            "status": "visible",
+            "max_score": 1.0,
+        },
+        {
+            "type": "moderation_decision",
+            "round": 1,
+            "action_type": "NO_OP",
+            "reason_rule_id": "RULE-PLZ-UI-01",
+            "status_before": "visible",
+            "status_after": "visible",
+            "report_total": 1,
+        },
+        {
+            "type": "end_condition",
+            "termination_reason": "round_limit",
+            "ended_round": 1,
+            "ended_early": False,
+            "status": "visible",
+        },
         {"type": "round", "round": 1, "community_id": "COM-PLZ-001"},
         {"type": "gate", "round": 1, "gates": [{"gate_name": "safety", "passed": True}]},
         {"type": "action", "round": 1, "action_type": "REPORT"},
@@ -88,5 +127,29 @@ def test_evaluate_run_fails_when_context_trace_missing(tmp_path: Path):
     assert result["pass_fail"] is False
     assert any(
         c["name"] == "runlog.context_trace_present" and c["passed"] is False
+        for c in result["checks"]
+    )
+
+
+def test_evaluate_run_fails_when_stage_trace_missing(tmp_path: Path):
+    run_dir = tmp_path / "runs" / "run-4"
+    _write_valid_run(run_dir)
+
+    rows = [
+        json.loads(line)
+        for line in (run_dir / "runlog.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    rows = [row for row in rows if row.get("type") != "moderation_decision"]
+    (run_dir / "runlog.jsonl").write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in rows),
+        encoding="utf-8",
+    )
+
+    result = evaluate_run(run_dir)
+
+    assert result["pass_fail"] is False
+    assert any(
+        c["name"] == "runlog.stage_trace_present" and c["passed"] is False
         for c in result["checks"]
     )

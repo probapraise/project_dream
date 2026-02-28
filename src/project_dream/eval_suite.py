@@ -17,6 +17,13 @@ REQUIRED_REPORT_KEYS = {
     "risk_checks",
 }
 VALID_RISK_SEVERITIES = {"low", "medium", "high"}
+REQUIRED_STAGE_EVENT_TYPES = {
+    "thread_candidate",
+    "thread_selected",
+    "round_summary",
+    "moderation_decision",
+    "end_condition",
+}
 
 
 def _quality_metrics_v1(runlog_rows: list[dict], report: dict) -> dict[str, float]:
@@ -215,6 +222,21 @@ def evaluate_run(run_dir: Path, metric_set: str = "v1") -> dict:
         )
     )
 
+    stage_type_counts: dict[str, int] = {
+        event_type: sum(1 for row in runlog_rows if row.get("type") == event_type)
+        for event_type in sorted(REQUIRED_STAGE_EVENT_TYPES)
+    }
+    missing_stage_types = [
+        event_type for event_type in sorted(REQUIRED_STAGE_EVENT_TYPES) if stage_type_counts[event_type] < 1
+    ]
+    checks.append(
+        EvalCheck(
+            name="runlog.stage_trace_present",
+            passed=len(missing_stage_types) == 0,
+            details=f"missing={missing_stage_types};counts={stage_type_counts}",
+        )
+    )
+
     checks.append(
         EvalCheck(
             name="report.schema_version",
@@ -273,6 +295,7 @@ def evaluate_run(run_dir: Path, metric_set: str = "v1") -> dict:
         metrics={
             "runlog_rows": len(runlog_rows),
             "context_rows": len(context_rows),
+            "stage_trace_rows": sum(stage_type_counts.values()),
             "round_rows": sum(1 for row in runlog_rows if row.get("type") == "round"),
             "gate_rows": sum(1 for row in runlog_rows if row.get("type") == "gate"),
             "action_rows": sum(1 for row in runlog_rows if row.get("type") == "action"),

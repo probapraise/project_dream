@@ -8,6 +8,34 @@ def _write_valid_run(run_dir: Path) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
     runlog = run_dir / "runlog.jsonl"
     rows = [
+        {"type": "context", "bundle": {"board_id": "B01", "zone_id": "A"}, "corpus": ["ctx-1"]},
+        {"type": "thread_candidate", "candidate_id": "TC-1", "thread_template_id": "T1"},
+        {"type": "thread_selected", "candidate_id": "TC-1", "thread_template_id": "T1"},
+        {
+            "type": "round_summary",
+            "round": 1,
+            "participant_count": 1,
+            "report_events": 1,
+            "policy_events": 0,
+            "status": "visible",
+            "max_score": 1.0,
+        },
+        {
+            "type": "moderation_decision",
+            "round": 1,
+            "action_type": "NO_OP",
+            "reason_rule_id": "RULE-PLZ-UI-01",
+            "status_before": "visible",
+            "status_after": "visible",
+            "report_total": 1,
+        },
+        {
+            "type": "end_condition",
+            "termination_reason": "round_limit",
+            "ended_round": 1,
+            "ended_early": False,
+            "status": "visible",
+        },
         {"type": "round", "round": 1, "community_id": "COM-PLZ-001"},
         {"type": "gate", "round": 1, "gates": [{"gate_name": "safety", "passed": True}]},
         {"type": "action", "round": 1, "action_type": "REPORT"},
