@@ -80,6 +80,10 @@ def persist_run(output_dir: Path, sim_result: dict, report: dict) -> Path:
         if selected_thread is not None:
             fp.write(json.dumps({"type": "thread_selected", **selected_thread}, ensure_ascii=False) + "\n")
 
+        end_condition = sim_result.get("end_condition")
+        if end_condition is not None:
+            fp.write(json.dumps({"type": "end_condition", **end_condition}, ensure_ascii=False) + "\n")
+
         for row in sim_result["rounds"]:
             fp.write(json.dumps({"type": "round", **row}, ensure_ascii=False) + "\n")
         for row in sim_result.get("gate_logs", []):

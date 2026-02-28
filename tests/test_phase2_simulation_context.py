@@ -55,6 +55,43 @@ def test_simulation_emits_thread_candidates_and_selection():
     assert all(row["thread_candidate_id"] == selected["candidate_id"] for row in round_rows)
 
 
+def test_simulation_marks_round_limit_end_condition():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    seed = SeedInput(
+        seed_id="SEED-END-ROUND-001",
+        title="마감 라운드 테스트",
+        summary="정상 라운드 종료",
+        board_id="B07",
+        zone_id="D",
+    )
+
+    result = run_simulation(seed=seed, rounds=3, corpus=["샘플"], packs=packs)
+
+    state = result["thread_state"]
+    assert state["termination_reason"] == "round_limit"
+    assert state["ended_round"] == 3
+    assert state["ended_early"] is False
+
+
+def test_simulation_ends_early_on_locked_status():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    seed = SeedInput(
+        seed_id="SEED-END-MOD-001",
+        title="누적 신고 락 테스트",
+        summary="신고 누적으로 잠금 종료",
+        board_id="B07",
+        zone_id="D",
+    )
+
+    result = run_simulation(seed=seed, rounds=10, corpus=["샘플"], max_retries=0, packs=packs)
+
+    state = result["thread_state"]
+    assert state["status"] in {"locked", "ghost", "sanctioned"}
+    assert state["termination_reason"] == "moderation_lock"
+    assert state["ended_early"] is True
+    assert state["ended_round"] < 10
+
+
 def test_simulation_emits_policy_transition_event_fields():
     packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
     seed = SeedInput(

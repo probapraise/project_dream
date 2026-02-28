@@ -116,8 +116,12 @@ def run_simulation(
     status = "visible"
     total_reports = 0
     total_views = 0
+    last_processed_round = 0
+    ended_early = False
+    termination_reason = "round_limit"
 
     for round_idx in range(1, rounds + 1):
+        last_processed_round = round_idx
         participants = select_participants(seed, round_idx=round_idx, packs=packs)[:3]
 
         for idx, persona_id in enumerate(participants):
@@ -223,9 +227,25 @@ def run_simulation(
                     }
                 )
 
+            if status in {"locked", "ghost", "sanctioned"}:
+                ended_early = True
+                termination_reason = "moderation_lock"
+                break
+
+        if ended_early:
+            break
+
+    end_condition = {
+        "termination_reason": termination_reason,
+        "ended_round": last_processed_round,
+        "ended_early": ended_early,
+        "status": status,
+    }
+
     return {
         "thread_candidates": thread_candidates,
         "selected_thread": selected_thread,
+        "end_condition": end_condition,
         "rounds": round_logs,
         "gate_logs": gate_logs,
         "action_logs": action_logs,
@@ -237,5 +257,8 @@ def run_simulation(
             "comment_flow_id": flow_id,
             "status": status,
             "total_reports": total_reports,
+            "termination_reason": termination_reason,
+            "ended_round": last_processed_round,
+            "ended_early": ended_early,
         },
     }
