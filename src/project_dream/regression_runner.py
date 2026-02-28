@@ -127,6 +127,7 @@ def run_regression_batch(
     stage_trace_ordered_runs = 0
     stage_trace_coverage_sum = 0.0
     eval_pass_runs = 0
+    report_gate_pass_runs = 0
 
     for seed_file in seed_files:
         seed = SeedInput.model_validate_json(seed_file.read_text(encoding="utf-8"))
@@ -167,6 +168,8 @@ def run_regression_batch(
         has_stage_trace_consistency = _has_stage_trace_consistency(eval_result)
         has_stage_trace_ordering = _has_stage_trace_ordering(eval_result)
         stage_trace_coverage_rate = float(eval_result.get("metrics", {}).get("stage_trace_coverage_rate", 0.0))
+        report_gate = report.get("report_gate", {}) if isinstance(report, dict) else {}
+        has_report_gate_pass = bool(report_gate.get("pass_fail"))
 
         missing_required_sections_total += len(missing_sections)
         conflict_frame_runs += int(has_conflict)
@@ -178,6 +181,7 @@ def run_regression_batch(
         stage_trace_ordered_runs += int(has_stage_trace_ordering)
         stage_trace_coverage_sum += stage_trace_coverage_rate
         eval_pass_runs += int(bool(eval_result.get("pass_fail")))
+        report_gate_pass_runs += int(has_report_gate_pass)
 
         run_summaries.append(
             {
@@ -195,6 +199,7 @@ def run_regression_batch(
                 "has_stage_trace_consistency": has_stage_trace_consistency,
                 "has_stage_trace_ordering": has_stage_trace_ordering,
                 "stage_trace_coverage_rate": stage_trace_coverage_rate,
+                "has_report_gate_pass": has_report_gate_pass,
             }
         )
 
@@ -214,6 +219,7 @@ def run_regression_batch(
         "stage_trace_consistent_runs": stage_trace_consistent_runs == len(run_summaries),
         "stage_trace_ordered_runs": stage_trace_ordered_runs == len(run_summaries),
         "stage_trace_coverage_rate": avg_stage_trace_coverage_rate >= 1.0,
+        "report_gate_pass_runs": report_gate_pass_runs == len(run_summaries),
     }
     pass_fail = all(gates.values())
 
@@ -247,6 +253,7 @@ def run_regression_batch(
             "stage_trace_consistent_runs": stage_trace_consistent_runs,
             "stage_trace_ordered_runs": stage_trace_ordered_runs,
             "avg_stage_trace_coverage_rate": avg_stage_trace_coverage_rate,
+            "report_gate_pass_runs": report_gate_pass_runs,
         },
         "gates": gates,
         "runs": run_summaries,

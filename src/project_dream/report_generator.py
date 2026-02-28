@@ -3,6 +3,7 @@ from collections import Counter
 from project_dream.llm_client import LLMClient, build_default_llm_client
 from project_dream.models import ReportConflictMap, ReportRiskCheck, ReportV1
 from project_dream.prompt_templates import render_prompt
+from project_dream.report_gate import run_report_gate
 
 
 def _build_lens_summaries(sim_result: dict, packs) -> list[dict]:
@@ -191,4 +192,6 @@ def build_report_v1(
         foreshadowing=_build_foreshadowing(sim_result),
         risk_checks=_build_risk_checks(sim_result),
     )
-    return report.model_dump()
+    payload = report.model_dump()
+    payload["report_gate"] = run_report_gate(payload)
+    return payload

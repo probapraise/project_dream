@@ -29,6 +29,9 @@ def test_report_v1_has_required_sections_and_sizes():
     assert len(report["dialogue_candidates"]) <= 5
     assert report["foreshadowing"]
     assert report["risk_checks"]
+    assert "report_gate" in report
+    assert report["report_gate"]["schema_version"] == "report_gate.v1"
+    assert report["report_gate"]["pass_fail"] is True
 
 
 def test_report_v1_accepts_custom_llm_client_for_summary_and_dialogue():
@@ -63,3 +66,4 @@ def test_report_v1_accepts_custom_llm_client_for_summary_and_dialogue():
     assert any(call["task"] == "report_summary" for call in fake_client.calls)
     dialogue_calls = [call for call in fake_client.calls if call["task"] == "report_dialogue_candidate"]
     assert len(dialogue_calls) == len(report["dialogue_candidates"])
+    assert report["report_gate"]["schema_version"] == "report_gate.v1"
