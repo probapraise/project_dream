@@ -17,6 +17,8 @@ HOST="${PROJECT_DREAM_HOST:-127.0.0.1}"
 PORT="${PROJECT_DREAM_PORT:-8000}"
 BASE_URL="${PROJECT_DREAM_BASE_URL:-http://$HOST:$PORT}"
 AUTH_HEADER="Authorization: Bearer $PROJECT_DREAM_API_TOKEN"
+SMOKE_VECTOR_SQLITE_CHECK="${PROJECT_DREAM_SMOKE_VECTOR_SQLITE_CHECK:-0}"
+SMOKE_VECTOR_DB_PATH="${PROJECT_DREAM_SMOKE_VECTOR_DB_PATH:-$ROOT_DIR/runs/smoke-vectors.sqlite3}"
 
 TMP_BODY="$(mktemp)"
 trap 'rm -f "$TMP_BODY"' EXIT
@@ -57,7 +59,14 @@ assert_status "200" "health check"
 request GET "$BASE_URL/runs/latest"
 assert_status "401" "unauthorized read endpoint"
 
-SIM_PAYLOAD='{"seed":{"seed_id":"SEED-SMOKE-001","title":"smoke","summary":"smoke run","board_id":"B07","zone_id":"D"},"rounds":3}'
+if [[ "$SMOKE_VECTOR_SQLITE_CHECK" == "1" ]]; then
+  SIM_PAYLOAD="$(cat <<EOF
+{"seed":{"seed_id":"SEED-SMOKE-001","title":"smoke","summary":"smoke run","board_id":"B07","zone_id":"D"},"rounds":3,"vector_backend":"sqlite","vector_db_path":"$SMOKE_VECTOR_DB_PATH"}
+EOF
+)"
+else
+  SIM_PAYLOAD='{"seed":{"seed_id":"SEED-SMOKE-001","title":"smoke","summary":"smoke run","board_id":"B07","zone_id":"D"},"rounds":3}'
+fi
 request POST "$BASE_URL/simulate" "$SIM_PAYLOAD" 1
 assert_status "200" "authorized simulate"
 
@@ -73,6 +82,15 @@ if [[ -z "$RUN_ID" ]]; then
   exit 1
 fi
 echo "[PASS] simulate produced run_id=$RUN_ID"
+
+if [[ "$SMOKE_VECTOR_SQLITE_CHECK" == "1" ]]; then
+  if [[ -f "$SMOKE_VECTOR_DB_PATH" ]]; then
+    echo "[PASS] smoke sqlite vector mode ($SMOKE_VECTOR_DB_PATH)"
+  else
+    echo "[FAIL] smoke sqlite vector mode expected db file not found: $SMOKE_VECTOR_DB_PATH"
+    exit 1
+  fi
+fi
 
 request GET "$BASE_URL/runs/latest" "" 1
 assert_status "200" "authorized read endpoint"
