@@ -13,6 +13,8 @@ def test_orchestrator_passes_rendered_voice_to_generator(monkeypatch):
         template_set: str = "v1",
         memory_hint: str | None = None,
         voice_constraints: dict | None = None,
+        template_context: dict | None = None,
+        flow_context: dict | None = None,
     ) -> str:
         calls.append(
             {

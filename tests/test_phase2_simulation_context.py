@@ -185,3 +185,47 @@ def test_simulation_emits_generation_stage_trace_fields():
     assert {"claim", "evidence", "intent"} <= set(stage1.keys())
     assert "dial" in stage1
     assert "voice_hint" in stage2
+
+
+def test_simulation_reflects_template_flow_runtime_fields():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    seed = SeedInput(
+        seed_id="SEED-TPL-001",
+        title="거래 사기 검증",
+        summary="의심 후기 묶음을 검증한다",
+        board_id="B07",
+        zone_id="D",
+    )
+
+    result = run_simulation(seed=seed, rounds=2, corpus=["샘플"], packs=packs)
+
+    selected = result["selected_thread"]
+    assert selected.get("title_pattern")
+    assert isinstance(selected.get("trigger_tags"), list)
+    assert selected["trigger_tags"]
+
+    first = result["rounds"][0]
+    stage1 = first["generation_stage1"]
+    stage2 = first["generation_stage2"]
+    assert isinstance(stage1.get("trigger_tags"), list)
+    assert isinstance(stage1.get("body_sections"), list)
+    assert isinstance(stage1.get("template_taboos"), list)
+    assert "sections=" in stage2.get("prompt", "")
+
+
+def test_simulation_emits_flow_escalation_actions():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    seed = SeedInput(
+        seed_id="SEED-FLOW-ESC-001",
+        title="검증 과열",
+        summary="신고 누적과 함께 흐름 에스컬레이션이 발생한다",
+        board_id="B07",
+        zone_id="D",
+    )
+
+    result = run_simulation(seed=seed, rounds=5, corpus=["샘플"], max_retries=0, packs=packs)
+    flow_actions = [row for row in result["action_logs"] if str(row.get("action_type", "")).startswith("FLOW_ESCALATE_")]
+
+    assert flow_actions
+    assert all("reason_rule_id" in row for row in flow_actions)
+    assert all(str(row["reason_rule_id"]).startswith("RULE-PLZ-") for row in flow_actions)

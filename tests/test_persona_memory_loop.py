@@ -24,6 +24,8 @@ def test_simulation_reuses_persona_memory_hint(monkeypatch):
         template_set: str = "v1",
         memory_hint: str | None = None,
         voice_constraints: dict | None = None,
+        template_context: dict | None = None,
+        flow_context: dict | None = None,
     ) -> str:
         captured_calls.append(
             {
@@ -91,6 +93,8 @@ def test_memory_hint_excludes_system_rewrite_artifacts(monkeypatch):
         template_set: str = "v1",
         memory_hint: str | None = None,
         voice_constraints: dict | None = None,
+        template_context: dict | None = None,
+        flow_context: dict | None = None,
     ) -> str:
         captured_calls.append(
             {

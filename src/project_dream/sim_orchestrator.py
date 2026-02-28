@@ -30,6 +30,69 @@ def _select_template(seed, packs) -> tuple[str, str]:
     return "T1", "P1"
 
 
+def _as_str_list(values: object) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    out: list[str] = []
+    for value in values:
+        text = str(value).strip()
+        if text:
+            out.append(text)
+    return out
+
+
+def _unique(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        out.append(value)
+    return out
+
+
+def _resolve_template_context(packs, template_id: str, selected_title_pattern: str = "") -> dict:
+    if packs and template_id in packs.thread_templates:
+        template = dict(packs.thread_templates[template_id])
+    else:
+        template = {"id": template_id}
+    title_patterns = _as_str_list(template.get("title_patterns")) or ["{title}"]
+    return {
+        "template_id": template_id,
+        "title_patterns": title_patterns,
+        "title_pattern": selected_title_pattern or title_patterns[0],
+        "trigger_tags": _as_str_list(template.get("trigger_tags")) or [f"template:{template_id.lower()}"],
+        "taboos": _as_str_list(template.get("taboos")),
+    }
+
+
+def _resolve_flow_context(packs, flow_id: str) -> dict:
+    if packs and flow_id in packs.comment_flows:
+        flow = dict(packs.comment_flows[flow_id])
+    else:
+        flow = {"id": flow_id}
+    return {
+        "flow_id": flow_id,
+        "body_sections": _as_str_list(flow.get("body_sections")) or ["상황정리", "근거정리", "요청/정리"],
+        "escalation_rules": list(flow.get("escalation_rules", []))
+        if isinstance(flow.get("escalation_rules"), list)
+        else [],
+    }
+
+
+def _render_title_pattern(pattern: str, seed) -> str:
+    try:
+        return pattern.format(
+            title=seed.title,
+            summary=seed.summary,
+            board_id=seed.board_id,
+            zone_id=seed.zone_id,
+        )
+    except (KeyError, ValueError):
+        return seed.title
+
+
 def _memory_summary(entries: list[str], *, max_items: int = 2, max_chars: int = 140) -> str:
     if not entries:
         return ""
@@ -50,18 +113,27 @@ def _build_thread_candidates(
     community_id: str,
     template_id: str,
     flow_id: str,
+    template_context: dict | None = None,
+    flow_context: dict | None = None,
     count: int = 3,
 ) -> list[dict]:
     frames = ("fact", "conflict", "rumor")
+    template_ctx = template_context or _resolve_template_context(None, template_id)
+    flow_ctx = flow_context or _resolve_flow_context(None, flow_id)
+    title_patterns = _as_str_list(template_ctx.get("title_patterns")) or ["{title}"]
+    trigger_tags = _as_str_list(template_ctx.get("trigger_tags"))
+    body_sections = _as_str_list(flow_ctx.get("body_sections"))
     candidates: list[dict] = []
     for idx in range(count):
         frame = frames[idx % len(frames)]
+        title_pattern = title_patterns[idx % len(title_patterns)]
+        rendered_title = _render_title_pattern(title_pattern, seed)
         prompt = render_prompt(
             "thread_generation",
             {
                 "board_id": seed.board_id,
                 "zone_id": seed.zone_id,
-                "title": seed.title,
+                "title": rendered_title,
                 "summary": seed.summary,
             },
         )
@@ -72,8 +144,16 @@ def _build_thread_candidates(
                 "thread_template_id": template_id,
                 "comment_flow_id": flow_id,
                 "frame": frame,
+                "title_pattern": title_pattern,
+                "rendered_title": rendered_title,
+                "trigger_tags": trigger_tags,
+                "body_sections": body_sections,
                 "score": round(1.0 - (idx * 0.1), 2),
-                "text": f"{prompt} | frame={frame}",
+                "text": (
+                    f"{prompt} | frame={frame}"
+                    f" | tags={','.join(trigger_tags)}"
+                    f" | sections={','.join(body_sections)}"
+                ),
             }
         )
     return candidates
@@ -125,6 +205,62 @@ def _build_round_summaries(round_logs: list[dict], action_logs: list[dict]) -> l
     return summaries
 
 
+def _is_escalation_rule_matched(rule: dict, *, round_idx: int, total_reports: int, status: str) -> bool:
+    condition = rule.get("condition", {})
+    if not isinstance(condition, dict):
+        condition = {}
+    reports_gte = int(condition.get("reports_gte", 0))
+    round_gte = int(condition.get("round_gte", 0))
+    status_in = condition.get("status_in", [])
+    if total_reports < reports_gte:
+        return False
+    if round_idx < round_gte:
+        return False
+    if isinstance(status_in, list) and status_in:
+        allowed = {str(value) for value in status_in}
+        if status not in allowed:
+            return False
+    return True
+
+
+def _collect_flow_escalation_events(
+    *,
+    rules: list[dict],
+    round_idx: int,
+    total_reports: int,
+    status: str,
+    seed_id: str,
+    fired_actions: set[str],
+) -> list[dict]:
+    events: list[dict] = []
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        action_type = str(rule.get("action_type", "")).strip()
+        if not action_type or action_type in fired_actions:
+            continue
+        if not _is_escalation_rule_matched(
+            rule,
+            round_idx=round_idx,
+            total_reports=total_reports,
+            status=status,
+        ):
+            continue
+        fired_actions.add(action_type)
+        events.append(
+            {
+                "round": round_idx,
+                "action_type": action_type,
+                "actor_id": "system",
+                "target_id": seed_id,
+                "reason_rule_id": str(rule.get("reason_rule_id", "RULE-PLZ-UI-01")),
+                "status": status,
+                "total_reports": total_reports,
+            }
+        )
+    return events
+
+
 def run_simulation(
     seed,
     rounds: int,
@@ -139,14 +275,27 @@ def run_simulation(
     persona_memory: dict[str, list[str]] = {}
     community_id = _select_community_id(seed, packs)
     template_id, flow_id = _select_template(seed, packs)
+    template_context = _resolve_template_context(packs, template_id)
+    flow_context = _resolve_flow_context(packs, flow_id)
     thread_candidates = _build_thread_candidates(
         seed,
         community_id=community_id,
         template_id=template_id,
         flow_id=flow_id,
+        template_context=template_context,
+        flow_context=flow_context,
         count=3,
     )
     selected_thread = _select_thread_candidate(thread_candidates)
+    selected_title_pattern = str(selected_thread.get("title_pattern", "")).strip()
+    selected_trigger_tags = _as_str_list(selected_thread.get("trigger_tags")) or _as_str_list(
+        template_context.get("trigger_tags")
+    )
+    selected_body_sections = _as_str_list(selected_thread.get("body_sections")) or _as_str_list(
+        flow_context.get("body_sections")
+    )
+    template_taboos = _as_str_list(template_context.get("taboos"))
+    fired_flow_actions: set[str] = set()
     account_type_cycle = ("public", "alias", "mask")
     sort_tab_cycle = ("latest", "weekly_hot", "evidence_first", "preserve_first")
 
@@ -171,7 +320,9 @@ def run_simulation(
             sort_tab = sort_tab_cycle[(round_idx - 1) % len(sort_tab_cycle)]
             before_entries = persona_memory.get(persona_id, [])
             memory_before = _memory_summary(before_entries)
-            voice_constraints = render_voice(persona_id, seed.zone_id, packs=packs)
+            voice_constraints = dict(render_voice(persona_id, seed.zone_id, packs=packs))
+            base_taboos = _as_str_list(voice_constraints.get("taboo_words"))
+            voice_constraints["taboo_words"] = _unique(base_taboos + template_taboos)
             reset_last_generation_trace()
             text = generate_comment(
                 seed,
@@ -179,6 +330,14 @@ def run_simulation(
                 round_idx=round_idx,
                 memory_hint=memory_before,
                 voice_constraints=voice_constraints,
+                template_context={
+                    "title_pattern": selected_title_pattern,
+                    "trigger_tags": selected_trigger_tags,
+                    "taboos": template_taboos,
+                },
+                flow_context={
+                    "body_sections": selected_body_sections,
+                },
             )
             generation_trace = pop_last_generation_trace() or {}
             stage1_trace = generation_trace.get(
@@ -188,6 +347,10 @@ def run_simulation(
                     "evidence": "",
                     "intent": "",
                     "dial": "",
+                    "title_pattern": "",
+                    "trigger_tags": [],
+                    "body_sections": [],
+                    "template_taboos": [],
                 },
             )
             stage2_trace = generation_trace.get(
@@ -195,6 +358,8 @@ def run_simulation(
                 {
                     "voice_hint": "",
                     "prompt": "",
+                    "sections": [],
+                    "trigger_tags": [],
                 },
             )
             last = None
@@ -255,6 +420,10 @@ def run_simulation(
                     "thread_candidate_id": selected_thread.get("candidate_id", "TC-0"),
                     "status": status,
                     "score": score,
+                    "title_pattern": selected_title_pattern,
+                    "template_trigger_tags": selected_trigger_tags,
+                    "flow_body_sections": selected_body_sections,
+                    "template_taboos": template_taboos,
                     "account_type": account_type,
                     "sort_tab": sort_tab,
                     "sanction_level": sanction_level,
@@ -310,6 +479,16 @@ def run_simulation(
                 termination_reason = "moderation_lock"
                 break
 
+        flow_events = _collect_flow_escalation_events(
+            rules=list(flow_context.get("escalation_rules", [])),
+            round_idx=round_idx,
+            total_reports=total_reports,
+            status=status,
+            seed_id=seed.seed_id,
+            fired_actions=fired_flow_actions,
+        )
+        action_logs.extend(flow_events)
+
         moderation_decisions.append(
             {
                 "round": round_idx,
@@ -348,6 +527,9 @@ def run_simulation(
             "community_id": community_id,
             "thread_template_id": template_id,
             "comment_flow_id": flow_id,
+            "title_pattern": selected_title_pattern,
+            "trigger_tags": selected_trigger_tags,
+            "body_sections": selected_body_sections,
             "status": status,
             "sanction_level": sanction_level,
             "total_reports": total_reports,

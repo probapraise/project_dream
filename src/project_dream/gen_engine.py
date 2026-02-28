@@ -28,6 +28,12 @@ def _render_dial_hint(dial: Dial) -> str:
     return f"U{dial.U}-E{dial.E}-M{dial.M}-S{dial.S}-H{dial.H}"
 
 
+def _render_csv(values: list[str] | None) -> str:
+    if not values:
+        return ""
+    return ",".join(str(value) for value in values if str(value).strip())
+
+
 def _default_intent_from_dial(dial: Dial) -> str:
     ranked = sorted(
         (
@@ -88,7 +94,13 @@ def _build_stage1(
     client: LLMClient,
     template_set: str,
     memory_hint: str | None,
+    template_context: Mapping[str, object] | None,
+    flow_context: Mapping[str, object] | None,
 ) -> dict:
+    selected_title_pattern = str((template_context or {}).get("title_pattern", "")).strip()
+    trigger_tags = [str(tag) for tag in list((template_context or {}).get("trigger_tags", [])) if str(tag).strip()]
+    template_taboos = [str(tag) for tag in list((template_context or {}).get("taboos", [])) if str(tag).strip()]
+    body_sections = [str(tag) for tag in list((flow_context or {}).get("body_sections", [])) if str(tag).strip()]
     stage1_prompt = render_prompt(
         "comment_stage1_plan",
         {
@@ -103,11 +115,21 @@ def _build_stage1(
         },
         template_set=template_set,
     )
+    stage1_prompt = (
+        f"{stage1_prompt} | title_pattern={selected_title_pattern}"
+        f" | trigger_tags={_render_csv(trigger_tags)}"
+        f" | body_sections={_render_csv(body_sections)}"
+        f" | template_taboos={_render_csv(template_taboos)}"
+    )
     stage1_raw = client.generate(stage1_prompt, task="comment_stage1")
     payload = _coerce_stage1_payload(stage1_raw, seed=seed)
     return {
         **payload,
         "dial": _render_dial_hint(seed.dial),
+        "title_pattern": selected_title_pattern,
+        "trigger_tags": trigger_tags,
+        "body_sections": body_sections,
+        "template_taboos": template_taboos,
         "prompt": stage1_prompt,
         "raw": stage1_raw,
     }
@@ -118,11 +140,16 @@ def _build_stage2_prompt(
     persona_id: str,
     round_idx: int,
     *,
-    stage1: Mapping[str, str],
+    stage1: Mapping[str, object],
     template_set: str,
     memory_hint: str | None,
     voice_constraints: dict | None,
+    template_context: Mapping[str, object] | None,
+    flow_context: Mapping[str, object] | None,
 ) -> tuple[str, str]:
+    trigger_tags = [str(tag) for tag in list((template_context or {}).get("trigger_tags", [])) if str(tag).strip()]
+    template_taboos = [str(tag) for tag in list((template_context or {}).get("taboos", [])) if str(tag).strip()]
+    body_sections = [str(tag) for tag in list((flow_context or {}).get("body_sections", [])) if str(tag).strip()]
     voice_hint = _render_voice_hint(voice_constraints)
     prompt = render_prompt(
         "comment_stage2_render",
@@ -140,6 +167,11 @@ def _build_stage2_prompt(
         },
         template_set=template_set,
     )
+    prompt = (
+        f"{prompt} | sections={_render_csv(body_sections)}"
+        f" | triggers={_render_csv(trigger_tags)}"
+        f" | taboos={_render_csv(template_taboos)}"
+    )
     return prompt, voice_hint
 
 
@@ -151,6 +183,8 @@ def generate_comment(
     template_set: str = "v1",
     memory_hint: str | None = None,
     voice_constraints: dict | None = None,
+    template_context: Mapping[str, object] | None = None,
+    flow_context: Mapping[str, object] | None = None,
 ) -> str:
     global _LAST_GENERATION_TRACE
     _LAST_GENERATION_TRACE = None
@@ -163,6 +197,8 @@ def generate_comment(
         client=client,
         template_set=template_set,
         memory_hint=memory_hint,
+        template_context=template_context,
+        flow_context=flow_context,
     )
     stage2_prompt, voice_hint = _build_stage2_prompt(
         seed,
@@ -172,6 +208,8 @@ def generate_comment(
         template_set=template_set,
         memory_hint=memory_hint,
         voice_constraints=voice_constraints,
+        template_context=template_context,
+        flow_context=flow_context,
     )
     final_text = client.generate(stage2_prompt, task="comment_generation")
     _LAST_GENERATION_TRACE = {
@@ -180,10 +218,16 @@ def generate_comment(
             "evidence": stage1.get("evidence", ""),
             "intent": stage1.get("intent", ""),
             "dial": stage1.get("dial", _render_dial_hint(seed.dial)),
+            "title_pattern": stage1.get("title_pattern", ""),
+            "trigger_tags": list(stage1.get("trigger_tags", [])),
+            "body_sections": list(stage1.get("body_sections", [])),
+            "template_taboos": list(stage1.get("template_taboos", [])),
         },
         "stage2": {
             "voice_hint": voice_hint,
             "prompt": stage2_prompt,
+            "sections": list((flow_context or {}).get("body_sections", [])),
+            "trigger_tags": list((template_context or {}).get("trigger_tags", [])),
         },
     }
     return final_text

@@ -128,3 +128,51 @@ def test_generator_uses_stage1_structured_output_when_json_provided():
     assert "intent=mediate" in client.calls[1]["prompt"]
     assert "dial=U30-E25-M15-S15-H15" in client.calls[1]["prompt"]
     assert "voice=style:short;endings:임;taboo_count:0" in output
+
+
+def test_generator_reflects_template_flow_context_in_stage_prompts():
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+
+        def generate(self, prompt: str, *, task: str) -> str:
+            self.calls.append({"prompt": prompt, "task": task})
+            if task == "comment_stage1":
+                return '{"claim":"거래 이력 충돌","evidence":"공개 로그 비교","intent":"evidence"}'
+            return prompt
+
+    seed = SeedInput(
+        seed_id="SEED-006",
+        title="거래 후기 조작 의혹",
+        summary="동일 상점 후기 패턴이 비정상이다",
+        board_id="B07",
+        zone_id="D",
+    )
+    client = FakeClient()
+
+    output = generate_comment(
+        seed,
+        "P-404",
+        round_idx=1,
+        llm_client=client,
+        template_context={
+            "title_pattern": "[장터검증] {title}",
+            "trigger_tags": ["escrow", "review-fraud"],
+            "taboos": ["illegal_trade", "fake_review"],
+        },
+        flow_context={
+            "body_sections": ["상황정리", "증거링크", "검증요청"],
+        },
+    )
+
+    assert len(client.calls) == 2
+    stage1_prompt = client.calls[0]["prompt"]
+    stage2_prompt = client.calls[1]["prompt"]
+    assert "title_pattern=[장터검증] {title}" in stage1_prompt
+    assert "trigger_tags=escrow,review-fraud" in stage1_prompt
+    assert "body_sections=상황정리,증거링크,검증요청" in stage1_prompt
+    assert "template_taboos=illegal_trade,fake_review" in stage1_prompt
+    assert "sections=상황정리,증거링크,검증요청" in stage2_prompt
+    assert "triggers=escrow,review-fraud" in stage2_prompt
+    assert "taboos=illegal_trade,fake_review" in stage2_prompt
+    assert "claim=거래 이력 충돌" in output
