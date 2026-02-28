@@ -31,6 +31,20 @@ cp .env.example .env
 
 `.env`에서 `PROJECT_DREAM_HOST/PORT/RUNS_DIR/PACKS_DIR`를 조정하면 환경이 바뀌어도 같은 명령으로 서버 실행/검증이 가능합니다.
 
+### Server Control
+
+```bash
+./scripts/server_ctl.sh start
+./scripts/server_ctl.sh status
+./scripts/server_ctl.sh check
+./scripts/server_ctl.sh logs
+./scripts/server_ctl.sh logs -f
+./scripts/server_ctl.sh restart
+./scripts/server_ctl.sh stop
+```
+
+`check`는 서버가 꺼져 있으면 먼저 기동한 뒤 `smoke_api.sh`를 실행합니다.
+
 ## CI Regression Gate
 
 GitHub Actions(`Regression Gate`)가 PR 및 `main` push에서 `pytest`와 `regress(metric-set v2)`를 자동 실행합니다.
