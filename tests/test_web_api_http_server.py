@@ -231,6 +231,11 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
         assert status == 200
         assert runlog["run_id"] == sim["run_id"]
         assert runlog["rows"]
+        assert runlog["summary"]["row_counts"]["graph_node"] >= 4
+        assert runlog["summary"]["row_counts"]["stage_checkpoint"] >= 4
+        assert "retry_count" in runlog["summary"]["stage"]
+        assert "failure_count" in runlog["summary"]["stage"]
+        assert "max_attempts" in runlog["summary"]["stage"]
 
         status, kb_search = _request_json(
             "POST",
@@ -321,6 +326,59 @@ def test_http_server_emits_structured_access_logs(tmp_path: Path):
         assert unauthorized_runs_latest
         assert all(not entry["auth_ok"] for entry in unauthorized_runs_latest)
         assert all(entry["event"] == "http_auth_failure" for entry in unauthorized_runs_latest)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_http_server_maps_stage_execution_failure_to_standard_error_schema(
+    tmp_path: Path,
+    monkeypatch,
+):
+    import project_dream.orchestrator_runtime as runtime
+
+    def always_fail_moderation(_payload: dict) -> dict:
+        raise RuntimeError("forced stage failure")
+
+    monkeypatch.setattr(runtime, "_run_stage_node_moderation", always_fail_moderation)
+
+    api = ProjectDreamAPI(
+        repository=FileRunRepository(tmp_path / "runs"),
+        packs_dir=Path("packs"),
+    )
+    token = "error-token"
+    auth = {"Authorization": f"Bearer {token}"}
+
+    server = create_server(api=api, host="127.0.0.1", port=0, api_token=token)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    try:
+        host, port = server.server_address
+        base = f"http://{host}:{port}"
+
+        status, payload = _request_json(
+            "POST",
+            f"{base}/simulate",
+            {
+                "seed": {
+                    "seed_id": "SEED-HTTP-STAGE-ERR-001",
+                    "title": "stage error",
+                    "summary": "stage error summary",
+                    "board_id": "B07",
+                    "zone_id": "D",
+                },
+                "rounds": 3,
+                "orchestrator_backend": "manual",
+            },
+            headers=auth,
+        )
+        assert status == 500
+        assert payload["error"] == "stage_execution_failed"
+        assert payload["error_code"] == "ORCH_STAGE_FAILED"
+        assert payload["stage_node"] == "moderation"
+        assert payload["attempts"] == 1
     finally:
         server.shutdown()
         server.server_close()

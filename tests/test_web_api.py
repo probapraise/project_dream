@@ -161,6 +161,11 @@ def test_web_api_read_endpoints(tmp_path: Path):
     assert runlog["run_id"] == sim_res["run_id"]
     assert runlog["rows"]
     assert any(row.get("type") == "context" for row in runlog["rows"])
+    assert runlog["summary"]["row_counts"]["graph_node"] >= 4
+    assert runlog["summary"]["row_counts"]["stage_checkpoint"] >= 4
+    assert "retry_count" in runlog["summary"]["stage"]
+    assert "failure_count" in runlog["summary"]["stage"]
+    assert "max_attempts" in runlog["summary"]["stage"]
 
 
 def test_web_api_list_runs_with_filters_and_pagination(tmp_path: Path):

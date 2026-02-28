@@ -16,6 +16,17 @@ from project_dream.sim_orchestrator import (
 _SUPPORTED_ORCHESTRATOR_BACKENDS = {"manual", "langgraph"}
 
 
+class StageNodeExecutionError(RuntimeError):
+    def __init__(self, *, node_id: str, attempts: int, cause: Exception):
+        self.node_id = str(node_id)
+        self.attempts = max(1, int(attempts))
+        self.cause = cause
+        message = (
+            f"Stage node '{self.node_id}' failed after {self.attempts} attempt(s): {cause}"
+        )
+        super().__init__(message)
+
+
 def _coerce_stage_payload(payload: dict | None) -> dict:
     if not isinstance(payload, dict):
         return {}
@@ -76,8 +87,10 @@ def _run_stage_node_with_retry(
                 }
             )
             if is_last_attempt:
-                raise RuntimeError(
-                    f"Stage node '{node_id}' failed after {attempt} attempt(s): {exc}"
+                raise StageNodeExecutionError(
+                    node_id=node_id,
+                    attempts=attempt,
+                    cause=exc,
                 ) from exc
             continue
 

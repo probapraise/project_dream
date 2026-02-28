@@ -197,6 +197,15 @@ def test_file_run_repository_persists_thread_rows_when_present(tmp_path: Path):
     assert len(stage_checkpoints) == 5
     assert any(row.get("outcome") == "retry" for row in stage_checkpoints)
 
+    runlog_payload = repo.load_runlog(run_dir.name)
+    assert "summary" in runlog_payload
+    assert runlog_payload["summary"]["row_counts"]["graph_node"] == 4
+    assert runlog_payload["summary"]["row_counts"]["graph_node_attempt"] == 4
+    assert runlog_payload["summary"]["row_counts"]["stage_checkpoint"] == 5
+    assert runlog_payload["summary"]["stage"]["retry_count"] == 1
+    assert runlog_payload["summary"]["stage"]["failure_count"] == 0
+    assert runlog_payload["summary"]["stage"]["max_attempts"] == 2
+
 
 def test_file_run_repository_lists_runs_with_filters_and_pagination(tmp_path: Path):
     repo = FileRunRepository(tmp_path / "runs")

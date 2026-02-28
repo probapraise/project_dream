@@ -116,6 +116,12 @@ def test_sqlite_run_repository_persists_and_reads_run_artifacts(tmp_path: Path):
     assert len(graph_node_attempts) == 4
     stage_checkpoints = [row for row in runlog["rows"] if row.get("type") == "stage_checkpoint"]
     assert len(stage_checkpoints) == 5
+    assert runlog["summary"]["row_counts"]["graph_node"] == 4
+    assert runlog["summary"]["row_counts"]["graph_node_attempt"] == 4
+    assert runlog["summary"]["row_counts"]["stage_checkpoint"] == 5
+    assert runlog["summary"]["stage"]["retry_count"] == 1
+    assert runlog["summary"]["stage"]["failure_count"] == 0
+    assert runlog["summary"]["stage"]["max_attempts"] == 2
 
 
 def test_sqlite_run_repository_updates_eval_and_latest_lookup(tmp_path: Path):
