@@ -83,6 +83,9 @@ def persist_run(output_dir: Path, sim_result: dict, report: dict) -> Path:
         for row in sim_result.get("round_summaries", []):
             fp.write(json.dumps({"type": "round_summary", **row}, ensure_ascii=False) + "\n")
 
+        for row in sim_result.get("moderation_decisions", []):
+            fp.write(json.dumps({"type": "moderation_decision", **row}, ensure_ascii=False) + "\n")
+
         end_condition = sim_result.get("end_condition")
         if end_condition is not None:
             fp.write(json.dumps({"type": "end_condition", **end_condition}, ensure_ascii=False) + "\n")

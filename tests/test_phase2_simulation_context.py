@@ -116,6 +116,27 @@ def test_simulation_emits_round_summaries():
     assert "policy_events" in first
 
 
+def test_simulation_emits_moderation_decisions():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    seed = SeedInput(
+        seed_id="SEED-MOD-001",
+        title="운영 판단 기록 테스트",
+        summary="라운드마다 운영 판단 이벤트를 남긴다",
+        board_id="B07",
+        zone_id="D",
+    )
+
+    result = run_simulation(seed=seed, rounds=4, corpus=["샘플"], packs=packs)
+
+    decisions = result["moderation_decisions"]
+    assert decisions
+    assert len(decisions) == result["thread_state"]["ended_round"]
+    assert all("round" in item for item in decisions)
+    assert all("action_type" in item for item in decisions)
+    assert all("status_after" in item for item in decisions)
+    assert all(item["action_type"] in {"NO_OP", "HIDE_PREVIEW", "LOCK_THREAD", "GHOST_THREAD", "SANCTION_USER"} for item in decisions)
+
+
 def test_simulation_emits_policy_transition_event_fields():
     packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
     seed = SeedInput(

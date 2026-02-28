@@ -35,6 +35,16 @@ def _sample_sim_result() -> dict:
                 "max_score": 1.0,
             }
         ],
+        "moderation_decisions": [
+            {
+                "round": 1,
+                "action_type": "NO_OP",
+                "reason_rule_id": "RULE-PLZ-UI-01",
+                "status_before": "visible",
+                "status_after": "visible",
+                "report_total": 0,
+            }
+        ],
         "end_condition": {
             "termination_reason": "round_limit",
             "ended_round": 1,
@@ -138,6 +148,10 @@ def test_file_run_repository_persists_thread_rows_when_present(tmp_path: Path):
     round_summary = next(row for row in rows if row.get("type") == "round_summary")
     assert round_summary["round"] == 1
     assert round_summary["participant_count"] == 1
+
+    moderation = next(row for row in rows if row.get("type") == "moderation_decision")
+    assert moderation["action_type"] == "NO_OP"
+    assert moderation["status_after"] == "visible"
 
     end_condition = next(row for row in rows if row.get("type") == "end_condition")
     assert end_condition["termination_reason"] == "round_limit"

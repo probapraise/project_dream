@@ -135,6 +135,7 @@ def run_simulation(
     round_logs: list[dict] = []
     gate_logs: list[dict] = []
     action_logs: list[dict] = []
+    moderation_decisions: list[dict] = []
     persona_memory: dict[str, list[str]] = {}
     community_id = _select_community_id(seed, packs)
     template_id, flow_id = _select_template(seed, packs)
@@ -156,6 +157,9 @@ def run_simulation(
 
     for round_idx in range(1, rounds + 1):
         last_processed_round = round_idx
+        round_status_before = status
+        round_action = "NO_OP"
+        round_reason_rule_id = "RULE-PLZ-UI-01"
         participants = select_participants(seed, round_idx=round_idx, packs=packs)[:3]
 
         for idx, persona_id in enumerate(participants):
@@ -260,11 +264,24 @@ def run_simulation(
                         "status": status,
                     }
                 )
+                round_action = transition_event["action_type"]
+                round_reason_rule_id = transition_event["reason_rule_id"]
 
             if status in {"locked", "ghost", "sanctioned"}:
                 ended_early = True
                 termination_reason = "moderation_lock"
                 break
+
+        moderation_decisions.append(
+            {
+                "round": round_idx,
+                "action_type": round_action,
+                "reason_rule_id": round_reason_rule_id,
+                "status_before": round_status_before,
+                "status_after": status,
+                "report_total": total_reports,
+            }
+        )
 
         if ended_early:
             break
@@ -281,6 +298,7 @@ def run_simulation(
         "thread_candidates": thread_candidates,
         "selected_thread": selected_thread,
         "round_summaries": round_summaries,
+        "moderation_decisions": moderation_decisions,
         "end_condition": end_condition,
         "rounds": round_logs,
         "gate_logs": gate_logs,
