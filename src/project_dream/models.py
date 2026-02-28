@@ -21,6 +21,9 @@ class EpisodeSeed(BaseModel):
     stakeholders: list[str] = Field(default_factory=list)
     forbidden_terms: list[str] = Field(default_factory=list)
     sensitivity_tags: list[str] = Field(default_factory=list)
+    evidence_grade: str = "B"
+    evidence_type: str = "log"
+    evidence_expiry_hours: int = 72
 
 
 class SeedInput(EpisodeSeed):
@@ -59,6 +62,7 @@ class ReportV1(BaseModel):
     foreshadowing: list[str]
     risk_checks: list[ReportRiskCheck]
     seed_constraints: dict = Field(default_factory=dict)
+    evidence_watch: dict = Field(default_factory=dict)
 
 
 class EvalCheck(BaseModel):

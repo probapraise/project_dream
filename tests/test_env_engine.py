@@ -10,3 +10,27 @@ def test_preserve_token_has_strong_visibility_effect():
 def test_report_threshold_transitions_to_hidden():
     state = apply_report_threshold(status="visible", reports=12, threshold=10)
     assert state == "hidden"
+
+
+def test_evidence_grade_and_countdown_affect_score():
+    baseline = compute_score(
+        up=3,
+        comments=2,
+        views=10,
+        preserve=1,
+        reports=1,
+        trust=1,
+        evidence_grade="B",
+        evidence_hours_left=72,
+    )
+    degraded = compute_score(
+        up=3,
+        comments=2,
+        views=10,
+        preserve=1,
+        reports=1,
+        trust=1,
+        evidence_grade="C",
+        evidence_hours_left=6,
+    )
+    assert degraded < baseline

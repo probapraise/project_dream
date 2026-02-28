@@ -176,6 +176,22 @@ def _seed_constraints(seed) -> dict:
     }
 
 
+def _build_evidence_watch(seed) -> dict:
+    raw_grade = str(getattr(seed, "evidence_grade", "B")).strip().upper()
+    grade = raw_grade if raw_grade in {"A", "B", "C"} else "B"
+    evidence_type = str(getattr(seed, "evidence_type", "log")).strip() or "log"
+    try:
+        expires_in_hours = max(0, int(getattr(seed, "evidence_expiry_hours", 72)))
+    except (TypeError, ValueError):
+        expires_in_hours = 72
+    return {
+        "grade": grade,
+        "type": evidence_type,
+        "expires_in_hours": expires_in_hours,
+        "countdown_risk": expires_in_hours <= 24,
+    }
+
+
 def build_report_v1(
     seed,
     sim_result: dict,
@@ -186,6 +202,7 @@ def build_report_v1(
     client = llm_client if llm_client is not None else build_default_llm_client()
     round_count = len(sim_result.get("rounds", []))
     constraints = _seed_constraints(seed)
+    evidence_watch = _build_evidence_watch(seed)
     risk_checks = _build_risk_checks(sim_result)
     if constraints["forbidden_terms"] or constraints["sensitivity_tags"]:
         risk_checks.append(
@@ -195,6 +212,17 @@ def build_report_v1(
                 details=(
                     f"forbidden_terms={len(constraints['forbidden_terms'])}, "
                     f"sensitivity_tags={','.join(constraints['sensitivity_tags']) or 'none'}"
+                ),
+            )
+        )
+    if evidence_watch["countdown_risk"] or evidence_watch["grade"] == "C":
+        risk_checks.append(
+            ReportRiskCheck(
+                category="evidence",
+                severity="medium" if evidence_watch["grade"] == "C" else "low",
+                details=(
+                    f"grade={evidence_watch['grade']}, "
+                    f"expires_in_hours={evidence_watch['expires_in_hours']}"
                 ),
             )
         )
@@ -221,6 +249,7 @@ def build_report_v1(
         foreshadowing=_build_foreshadowing(sim_result),
         risk_checks=risk_checks,
         seed_constraints=constraints,
+        evidence_watch=evidence_watch,
     )
     payload = report.model_dump()
     payload["report_gate"] = run_report_gate(payload)

@@ -92,3 +92,27 @@ def test_report_v1_includes_seed_constraints_summary():
     assert constraints["forbidden_terms"] == ["실명노출"]
     assert constraints["sensitivity_tags"] == ["privacy"]
     assert constraints["has_hidden_facts"] is True
+
+
+def test_report_v1_includes_evidence_watch_fields():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    seed = SeedInput(
+        seed_id="SEED-RPT-004",
+        title="증거 등급 리포트 반영",
+        summary="카운트다운/증거 등급을 리포트에 표시한다",
+        board_id="B07",
+        zone_id="D",
+        evidence_grade="C",
+        evidence_type="rumor_capture",
+        evidence_expiry_hours=12,
+    )
+    sim_result = run_simulation(seed=seed, rounds=2, corpus=["샘플"], packs=packs)
+
+    report = build_report_v1(seed, sim_result, packs)
+
+    assert "evidence_watch" in report
+    watch = report["evidence_watch"]
+    assert watch["grade"] == "C"
+    assert watch["type"] == "rumor_capture"
+    assert watch["expires_in_hours"] == 12
+    assert any(item["category"] == "evidence" for item in report["risk_checks"])

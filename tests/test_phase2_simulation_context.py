@@ -248,3 +248,29 @@ def test_simulation_selects_event_card_and_meme_seed():
     assert selected.get("meme_seed_id")
     assert all(row.get("event_card_id") == selected["event_card_id"] for row in result["rounds"])
     assert all(row.get("meme_seed_id") == selected["meme_seed_id"] for row in result["rounds"])
+
+
+def test_simulation_tracks_evidence_grade_and_countdown():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    seed = SeedInput(
+        seed_id="SEED-EVID-001",
+        title="증거 카운트다운 테스트",
+        summary="증거 만료 시간이 라운드에 반영되어야 한다",
+        board_id="B07",
+        zone_id="D",
+        evidence_grade="B",
+        evidence_type="log",
+        evidence_expiry_hours=24,
+    )
+
+    result = run_simulation(seed=seed, rounds=3, corpus=["샘플"], packs=packs)
+    rounds = result["rounds"]
+
+    assert rounds
+    assert all(row.get("evidence_grade") == "B" for row in rounds)
+    assert all(row.get("evidence_type") == "log" for row in rounds)
+    assert all("evidence_hours_left" in row for row in rounds)
+
+    first_hour = rounds[0]["evidence_hours_left"]
+    last_hour = rounds[-1]["evidence_hours_left"]
+    assert first_hour >= last_hour

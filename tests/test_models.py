@@ -24,9 +24,15 @@ def test_seed_input_v2_fields_are_supported():
         stakeholders=["조직 A", "조직 B"],
         forbidden_terms=["금지어X"],
         sensitivity_tags=["legal", "privacy"],
+        evidence_grade="A",
+        evidence_type="signed_log",
+        evidence_expiry_hours=18,
     )
     assert seed.public_facts == ["공개 사실 A"]
     assert seed.hidden_facts == ["숨김 사실 B"]
     assert seed.stakeholders == ["조직 A", "조직 B"]
     assert seed.forbidden_terms == ["금지어X"]
     assert seed.sensitivity_tags == ["legal", "privacy"]
+    assert seed.evidence_grade == "A"
+    assert seed.evidence_type == "signed_log"
+    assert seed.evidence_expiry_hours == 18

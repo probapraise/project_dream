@@ -563,6 +563,8 @@ def _round_node_policy_transition(
     account_type: str,
     verified: bool,
     sort_tab: str,
+    evidence_grade: str,
+    evidence_hours_left: int,
 ) -> dict:
     next_total_reports = total_reports + report_delta
     next_total_views = total_views + 3
@@ -577,6 +579,8 @@ def _round_node_policy_transition(
         account_type=account_type,
         sanction_level=sanction_level,
         sort_tab=sort_tab,
+        evidence_grade=evidence_grade,
+        evidence_hours_left=evidence_hours_left,
     )
 
     severity = 0
@@ -622,6 +626,9 @@ def _round_node_emit_logs(
     selected_trigger_tags: list[str],
     selected_body_sections: list[str],
     template_taboos: list[str],
+    evidence_grade: str,
+    evidence_type: str,
+    evidence_hours_left: int,
     account_type: str,
     sort_tab: str,
     sanction_level: int,
@@ -658,6 +665,9 @@ def _round_node_emit_logs(
         "template_trigger_tags": selected_trigger_tags,
         "flow_body_sections": selected_body_sections,
         "template_taboos": template_taboos,
+        "evidence_grade": evidence_grade,
+        "evidence_type": evidence_type,
+        "evidence_hours_left": evidence_hours_left,
         "account_type": account_type,
         "sort_tab": sort_tab,
         "sanction_level": sanction_level,
@@ -804,6 +814,13 @@ def run_simulation(
     template_taboos = _as_str_list(template_context.get("taboos"))
     seed_forbidden_terms = _as_str_list(getattr(seed, "forbidden_terms", []))
     seed_sensitivity_tags = _as_str_list(getattr(seed, "sensitivity_tags", []))
+    raw_evidence_grade = str(getattr(seed, "evidence_grade", "B")).strip().upper()
+    evidence_grade = raw_evidence_grade if raw_evidence_grade in {"A", "B", "C"} else "B"
+    evidence_type = str(getattr(seed, "evidence_type", "log")).strip() or "log"
+    try:
+        evidence_hours_left = max(0, int(getattr(seed, "evidence_expiry_hours", 72)))
+    except (TypeError, ValueError):
+        evidence_hours_left = 72
     fired_flow_actions: set[str] = set()
     account_type_cycle = ("public", "alias", "mask")
     sort_tab_cycle = ("latest", "weekly_hot", "evidence_first", "preserve_first")
@@ -862,6 +879,8 @@ def run_simulation(
                 account_type=account_type,
                 verified=verified,
                 sort_tab=sort_tab,
+                evidence_grade=evidence_grade,
+                evidence_hours_left=evidence_hours_left,
             )
             status = str(transitioned["status"])
             sanction_level = int(transitioned["sanction_level"])
@@ -887,6 +906,9 @@ def run_simulation(
                 selected_trigger_tags=selected_trigger_tags,
                 selected_body_sections=selected_body_sections,
                 template_taboos=template_taboos,
+                evidence_grade=evidence_grade,
+                evidence_type=evidence_type,
+                evidence_hours_left=evidence_hours_left,
                 account_type=account_type,
                 sort_tab=sort_tab,
                 sanction_level=sanction_level,
@@ -940,6 +962,7 @@ def run_simulation(
 
         if ended_early:
             break
+        evidence_hours_left = max(0, evidence_hours_left - 6)
 
     end_condition = {
         "termination_reason": termination_reason,
@@ -956,6 +979,9 @@ def run_simulation(
         "comment_flow_id": flow_id,
         "event_card_id": event_card_id,
         "meme_seed_id": meme_seed_id,
+        "evidence_grade": evidence_grade,
+        "evidence_type": evidence_type,
+        "evidence_hours_left": evidence_hours_left,
         "title_pattern": selected_title_pattern,
         "trigger_tags": selected_trigger_tags,
         "body_sections": selected_body_sections,

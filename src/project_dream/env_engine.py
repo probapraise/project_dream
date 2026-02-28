@@ -111,6 +111,8 @@ def compute_score(
     account_type: str = "public",
     sanction_level: int = 0,
     sort_tab: str = "weekly_hot",
+    evidence_grade: str = "B",
+    evidence_hours_left: int | None = None,
 ) -> float:
     w1, w2, w3, w4, w5, w6 = 1.0, 1.3, 0.2, 3.0, 1.8, 1.1
     base = (up * w1) + (comments * w2) + (views * w3) + (preserve * w4) - (reports * w5) + (trust * w6)
@@ -118,7 +120,16 @@ def compute_score(
     tab = _normalize_tab(sort_tab)
     exposure = _ACCOUNT_EXPOSURE_MULTIPLIER[account]
     sanction_penalty = max(0.5, 1.0 - (max(0, min(int(sanction_level), 5)) * 0.06))
-    score = base * exposure * sanction_penalty * _TAB_SCORE_MULTIPLIER[tab]
+    grade = str(evidence_grade).strip().upper()
+    grade_multiplier = {"A": 1.06, "B": 1.0, "C": 0.9}.get(grade, 1.0)
+    countdown_multiplier = 1.0
+    if evidence_hours_left is not None:
+        remaining = max(0, int(evidence_hours_left))
+        if remaining <= 12:
+            countdown_multiplier = 0.9
+        elif remaining <= 24:
+            countdown_multiplier = 0.95
+    score = base * exposure * sanction_penalty * _TAB_SCORE_MULTIPLIER[tab] * grade_multiplier * countdown_multiplier
     return score + urgent
 
 
