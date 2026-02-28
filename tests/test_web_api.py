@@ -274,3 +274,34 @@ def test_web_api_for_local_filesystem_rejects_unknown_backend(tmp_path: Path):
             packs_dir=Path("packs"),
             repository_backend="unknown",
         )
+
+
+def test_web_api_sqlite_regression_summary_index_survives_file_deletion(tmp_path: Path):
+    repo = SQLiteRunRepository(tmp_path / "runs")
+    api = ProjectDreamAPI(repository=repo, packs_dir=Path("packs"))
+
+    summary = api.regress(
+        seeds_dir=Path("examples/seeds/regression"),
+        rounds=3,
+        max_seeds=1,
+        metric_set="v2",
+        min_community_coverage=1,
+        min_conflict_frame_runs=0,
+        min_moderation_hook_runs=0,
+        min_validation_warning_runs=0,
+    )
+    summary_path = Path(summary["summary_path"])
+    summary_id = summary_path.name
+    summary_path.unlink()
+
+    listed = api.list_regression_summaries()
+    assert listed["count"] >= 1
+    assert any(item["summary_id"] == summary_id for item in listed["items"])
+
+    latest = api.latest_regression_summary()
+    assert latest["schema_version"] == "regression.v1"
+    assert latest["summary_path"].endswith(summary_id)
+
+    loaded = api.get_regression_summary(summary_id.removesuffix(".json"))
+    assert loaded["schema_version"] == "regression.v1"
+    assert loaded["summary_path"].endswith(summary_id)
