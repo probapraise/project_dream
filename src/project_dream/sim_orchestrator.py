@@ -91,6 +91,40 @@ def _select_thread_candidate(candidates: list[dict]) -> dict:
     return max(candidates, key=lambda item: float(item.get("score", 0.0)))
 
 
+def _build_round_summaries(round_logs: list[dict], action_logs: list[dict]) -> list[dict]:
+    policy_actions = {"HIDE_PREVIEW", "LOCK_THREAD", "GHOST_THREAD", "SANCTION_USER"}
+    rounds = sorted({int(row.get("round", 0)) for row in round_logs if int(row.get("round", 0)) > 0})
+    summaries: list[dict] = []
+
+    for round_idx in rounds:
+        rows = [row for row in round_logs if int(row.get("round", 0)) == round_idx]
+        reports = [
+            row
+            for row in action_logs
+            if int(row.get("round", 0)) == round_idx and row.get("action_type") == "REPORT"
+        ]
+        policies = [
+            row
+            for row in action_logs
+            if int(row.get("round", 0)) == round_idx and row.get("action_type") in policy_actions
+        ]
+
+        last_status = rows[-1].get("status", "visible") if rows else "visible"
+        max_score = max(float(row.get("score", 0.0)) for row in rows) if rows else 0.0
+        summaries.append(
+            {
+                "round": round_idx,
+                "participant_count": len(rows),
+                "report_events": len(reports),
+                "policy_events": len(policies),
+                "status": last_status,
+                "max_score": round(max_score, 4),
+            }
+        )
+
+    return summaries
+
+
 def run_simulation(
     seed,
     rounds: int,
@@ -116,8 +150,12 @@ def run_simulation(
     status = "visible"
     total_reports = 0
     total_views = 0
+    last_processed_round = 0
+    ended_early = False
+    termination_reason = "round_limit"
 
     for round_idx in range(1, rounds + 1):
+        last_processed_round = round_idx
         participants = select_participants(seed, round_idx=round_idx, packs=packs)[:3]
 
         for idx, persona_id in enumerate(participants):
@@ -223,9 +261,27 @@ def run_simulation(
                     }
                 )
 
+            if status in {"locked", "ghost", "sanctioned"}:
+                ended_early = True
+                termination_reason = "moderation_lock"
+                break
+
+        if ended_early:
+            break
+
+    end_condition = {
+        "termination_reason": termination_reason,
+        "ended_round": last_processed_round,
+        "ended_early": ended_early,
+        "status": status,
+    }
+    round_summaries = _build_round_summaries(round_logs, action_logs)
+
     return {
         "thread_candidates": thread_candidates,
         "selected_thread": selected_thread,
+        "round_summaries": round_summaries,
+        "end_condition": end_condition,
         "rounds": round_logs,
         "gate_logs": gate_logs,
         "action_logs": action_logs,
@@ -237,5 +293,8 @@ def run_simulation(
             "comment_flow_id": flow_id,
             "status": status,
             "total_reports": total_reports,
+            "termination_reason": termination_reason,
+            "ended_round": last_processed_round,
+            "ended_early": ended_early,
         },
     }

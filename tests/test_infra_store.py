@@ -25,6 +25,22 @@ def _sample_sim_result() -> dict:
         "rounds": [{"round": 1, "persona_id": "P1", "text": "t", "community_id": "COM-PLZ-001"}],
         "gate_logs": [{"round": 1, "persona_id": "P1", "gates": [{"gate_name": "safety", "passed": True}]}],
         "action_logs": [{"round": 1, "action_type": "POST_COMMENT"}],
+        "round_summaries": [
+            {
+                "round": 1,
+                "participant_count": 1,
+                "report_events": 0,
+                "policy_events": 0,
+                "status": "visible",
+                "max_score": 1.0,
+            }
+        ],
+        "end_condition": {
+            "termination_reason": "round_limit",
+            "ended_round": 1,
+            "ended_early": False,
+            "status": "visible",
+        },
     }
 
 
@@ -118,3 +134,10 @@ def test_file_run_repository_persists_thread_rows_when_present(tmp_path: Path):
 
     selected = next(row for row in rows if row.get("type") == "thread_selected")
     assert selected["candidate_id"] == "TC-1"
+
+    round_summary = next(row for row in rows if row.get("type") == "round_summary")
+    assert round_summary["round"] == 1
+    assert round_summary["participant_count"] == 1
+
+    end_condition = next(row for row in rows if row.get("type") == "end_condition")
+    assert end_condition["termination_reason"] == "round_limit"
