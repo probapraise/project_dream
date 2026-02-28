@@ -23,6 +23,7 @@ def test_simulation_uses_pack_context_and_action_logs():
     assert first["community_id"] == "COM-PLZ-004"
     assert first["thread_template_id"].startswith("T")
     assert first["comment_flow_id"].startswith("P")
+    assert first["persona_id"].startswith("P")
 
     assert result["action_logs"]
     assert any(row["action_type"] == "REPORT" for row in result["action_logs"])

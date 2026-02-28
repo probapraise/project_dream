@@ -47,7 +47,7 @@ def run_simulation(
     total_views = 0
 
     for round_idx in range(1, rounds + 1):
-        participants = select_participants(seed, round_idx=round_idx)[:3]
+        participants = select_participants(seed, round_idx=round_idx, packs=packs)[:3]
 
         for idx, persona_id in enumerate(participants):
             text = generate_comment(seed, persona_id, round_idx=round_idx)
