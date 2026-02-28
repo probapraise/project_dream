@@ -7,11 +7,28 @@ from project_dream.models import SeedInput
 from project_dream.pack_service import load_packs
 
 
+def _normalize_vector_backend(backend: str) -> str:
+    normalized = backend.strip().lower()
+    if normalized not in {"memory", "sqlite"}:
+        raise ValueError(f"Unknown vector backend: {backend}")
+    return normalized
+
+
 class ProjectDreamAPI:
-    def __init__(self, repository: RunRepository, packs_dir: Path, corpus_dir: Path = Path("corpus")):
+    def __init__(
+        self,
+        repository: RunRepository,
+        packs_dir: Path,
+        corpus_dir: Path = Path("corpus"),
+        *,
+        vector_backend: str = "memory",
+        vector_db_path: Path | None = None,
+    ):
         self.repository = repository
         self.packs_dir = packs_dir
         self.corpus_dir = corpus_dir
+        self.vector_backend = _normalize_vector_backend(vector_backend)
+        self.vector_db_path = vector_db_path
 
     @classmethod
     def for_local_filesystem(
@@ -22,6 +39,8 @@ class ProjectDreamAPI:
         corpus_dir: Path = Path("corpus"),
         repository_backend: str = "file",
         sqlite_db_path: Path | None = None,
+        vector_backend: str = "memory",
+        vector_db_path: Path | None = None,
     ) -> "ProjectDreamAPI":
         backend = repository_backend.strip().lower()
         if backend == "sqlite":
@@ -30,13 +49,32 @@ class ProjectDreamAPI:
             repository = FileRunRepository(runs_dir)
         else:
             raise ValueError(f"Unknown repository backend: {repository_backend}")
-        return cls(repository=repository, packs_dir=packs_dir, corpus_dir=corpus_dir)
+        return cls(
+            repository=repository,
+            packs_dir=packs_dir,
+            corpus_dir=corpus_dir,
+            vector_backend=vector_backend,
+            vector_db_path=vector_db_path,
+        )
 
     def health(self) -> dict:
         return {"status": "ok", "service": "project-dream"}
 
-    def simulate(self, seed_payload: dict, rounds: int = 3, orchestrator_backend: str = "manual") -> dict:
+    def simulate(
+        self,
+        seed_payload: dict,
+        rounds: int = 3,
+        orchestrator_backend: str = "manual",
+        vector_backend: str | None = None,
+        vector_db_path: Path | None = None,
+    ) -> dict:
         seed = SeedInput.model_validate(seed_payload)
+        resolved_vector_backend = (
+            self.vector_backend
+            if vector_backend is None
+            else _normalize_vector_backend(vector_backend)
+        )
+        resolved_vector_db_path = self.vector_db_path if vector_db_path is None else vector_db_path
         run_dir = simulate_and_persist(
             seed,
             rounds=rounds,
@@ -44,6 +82,8 @@ class ProjectDreamAPI:
             corpus_dir=self.corpus_dir,
             repository=self.repository,
             orchestrator_backend=orchestrator_backend,
+            vector_backend=resolved_vector_backend,
+            vector_db_path=resolved_vector_db_path,
         )
         return {"run_id": run_dir.name, "run_dir": str(run_dir)}
 
@@ -116,7 +156,15 @@ class ProjectDreamAPI:
         min_moderation_hook_runs: int = 1,
         min_validation_warning_runs: int = 1,
         orchestrator_backend: str = "manual",
+        vector_backend: str | None = None,
+        vector_db_path: Path | None = None,
     ) -> dict:
+        resolved_vector_backend = (
+            self.vector_backend
+            if vector_backend is None
+            else _normalize_vector_backend(vector_backend)
+        )
+        resolved_vector_db_path = self.vector_db_path if vector_db_path is None else vector_db_path
         return regress_and_persist(
             repository=self.repository,
             packs_dir=self.packs_dir,
@@ -130,11 +178,18 @@ class ProjectDreamAPI:
             min_moderation_hook_runs=min_moderation_hook_runs,
             min_validation_warning_runs=min_validation_warning_runs,
             orchestrator_backend=orchestrator_backend,
+            vector_backend=resolved_vector_backend,
+            vector_db_path=resolved_vector_db_path,
         )
 
     def _build_kb_index(self) -> dict:
         packs = load_packs(self.packs_dir, enforce_phase1_minimums=True)
-        return build_index(packs, corpus_dir=self.corpus_dir)
+        return build_index(
+            packs,
+            corpus_dir=self.corpus_dir,
+            vector_backend=self.vector_backend,
+            vector_db_path=self.vector_db_path,
+        )
 
     def search_knowledge(
         self, *, query: str, filters: dict | None = None, top_k: int = 5

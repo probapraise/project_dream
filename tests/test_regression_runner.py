@@ -109,7 +109,12 @@ def test_run_regression_batch_uses_retrieved_context_corpus(
         "run_simulation_with_backend",
         spy_run_simulation_with_backend,
     )
-    monkeypatch.setattr(regression_runner, "build_index", lambda packs: {"fake": "index"}, raising=False)
+    monkeypatch.setattr(
+        regression_runner,
+        "build_index",
+        lambda packs, **kwargs: {"fake": "index"},
+        raising=False,
+    )
     monkeypatch.setattr(
         regression_runner,
         "retrieve_context",
@@ -175,7 +180,12 @@ def test_run_regression_batch_merges_ingested_corpus(
         "run_simulation_with_backend",
         spy_run_simulation_with_backend,
     )
-    monkeypatch.setattr(regression_runner, "build_index", lambda packs: {"fake": "index"}, raising=False)
+    monkeypatch.setattr(
+        regression_runner,
+        "build_index",
+        lambda packs, **kwargs: {"fake": "index"},
+        raising=False,
+    )
     monkeypatch.setattr(
         regression_runner,
         "retrieve_context",
@@ -249,3 +259,45 @@ def test_run_regression_batch_forwards_orchestrator_backend(
     )
 
     assert captured["backend"] == "langgraph"
+
+
+def test_run_regression_batch_forwards_vector_backend_to_build_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    seeds_dir = tmp_path / "seeds"
+    seeds_dir.mkdir(parents=True, exist_ok=True)
+    _write_seed(seeds_dir / "seed_001.json", "SEED-R-VECTOR-001", "B07", "D")
+
+    captured: dict = {}
+
+    def fake_build_index(packs, corpus_dir=None, *, vector_backend="memory", vector_db_path=None):
+        captured["vector_backend"] = vector_backend
+        captured["vector_db_path"] = vector_db_path
+        return {"fake": "index"}
+
+    monkeypatch.setattr(regression_runner, "build_index", fake_build_index, raising=False)
+    monkeypatch.setattr(
+        regression_runner,
+        "retrieve_context",
+        lambda index, **kwargs: {"bundle": {}, "corpus": ["ctx-B07-D"]},
+        raising=False,
+    )
+
+    vector_db_path = tmp_path / "vectors.sqlite3"
+    run_regression_batch(
+        seeds_dir=seeds_dir,
+        packs_dir=Path("packs"),
+        output_dir=tmp_path / "runs",
+        rounds=3,
+        max_seeds=1,
+        metric_set="v1",
+        min_community_coverage=1,
+        min_conflict_frame_runs=0,
+        min_moderation_hook_runs=0,
+        min_validation_warning_runs=0,
+        vector_backend="sqlite",
+        vector_db_path=vector_db_path,
+    )
+
+    assert captured["vector_backend"] == "sqlite"
+    assert captured["vector_db_path"] == vector_db_path

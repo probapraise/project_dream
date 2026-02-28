@@ -154,6 +154,13 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["manual", "langgraph"],
         default="manual",
     )
+    sim.add_argument(
+        "--vector-backend",
+        required=False,
+        choices=["memory", "sqlite"],
+        default="memory",
+    )
+    sim.add_argument("--vector-db-path", required=False, default=None)
 
     ingest = sub.add_parser("ingest")
     ingest.add_argument("--packs-dir", required=False, default="packs")
@@ -192,6 +199,13 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["manual", "langgraph"],
         default="manual",
     )
+    reg.add_argument(
+        "--vector-backend",
+        required=False,
+        choices=["memory", "sqlite"],
+        default="memory",
+    )
+    reg.add_argument("--vector-db-path", required=False, default=None)
 
     reg_live = sub.add_parser("regress-live")
     reg_live.add_argument("--seeds-dir", required=False, default="examples/seeds/regression")
@@ -221,6 +235,13 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["manual", "langgraph"],
         default="manual",
     )
+    reg_live.add_argument(
+        "--vector-backend",
+        required=False,
+        choices=["memory", "sqlite"],
+        default="memory",
+    )
+    reg_live.add_argument("--vector-db-path", required=False, default=None)
 
     srv = sub.add_parser("serve")
     srv.add_argument("--host", required=False, default="127.0.0.1")
@@ -230,6 +251,13 @@ def build_parser() -> argparse.ArgumentParser:
     srv.add_argument("--api-token", required=False, default=None)
     srv.add_argument("--repo-backend", required=False, choices=["file", "sqlite"], default="file")
     srv.add_argument("--sqlite-db-path", required=False, default=None)
+    srv.add_argument(
+        "--vector-backend",
+        required=False,
+        choices=["memory", "sqlite"],
+        default="memory",
+    )
+    srv.add_argument("--vector-db-path", required=False, default=None)
     return parser
 
 
@@ -252,6 +280,8 @@ def main(argv: list[str] | None = None) -> int:
             corpus_dir=Path(args.corpus_dir),
             repository=repository,
             orchestrator_backend=args.orchestrator_backend,
+            vector_backend=args.vector_backend,
+            vector_db_path=Path(args.vector_db_path) if args.vector_db_path else None,
         )
     elif args.command == "ingest":
         summary = build_corpus_from_packs(
@@ -298,6 +328,8 @@ def main(argv: list[str] | None = None) -> int:
             min_moderation_hook_runs=args.min_moderation_hook_runs,
             min_validation_warning_runs=args.min_validation_warning_runs,
             orchestrator_backend=args.orchestrator_backend,
+            vector_backend=args.vector_backend,
+            vector_db_path=Path(args.vector_db_path) if args.vector_db_path else None,
         )
         return 0 if summary["pass_fail"] else 2
     elif args.command == "regress-live":
@@ -323,6 +355,8 @@ def main(argv: list[str] | None = None) -> int:
                 min_moderation_hook_runs=args.min_moderation_hook_runs,
                 min_validation_warning_runs=args.min_validation_warning_runs,
                 orchestrator_backend=args.orchestrator_backend,
+                vector_backend=args.vector_backend,
+                vector_db_path=Path(args.vector_db_path) if args.vector_db_path else None,
             )
         if not summary["pass_fail"]:
             return 2
@@ -372,6 +406,8 @@ def main(argv: list[str] | None = None) -> int:
             packs_dir=Path(args.packs_dir),
             repository_backend=args.repo_backend,
             sqlite_db_path=Path(args.sqlite_db_path) if args.sqlite_db_path else None,
+            vector_backend=args.vector_backend,
+            vector_db_path=Path(args.vector_db_path) if args.vector_db_path else None,
         )
         try:
             serve(

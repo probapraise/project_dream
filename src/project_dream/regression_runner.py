@@ -110,9 +110,15 @@ def run_regression_batch(
     min_moderation_hook_runs: int = 1,
     min_validation_warning_runs: int = 1,
     orchestrator_backend: str = "manual",
+    vector_backend: str = "memory",
+    vector_db_path: Path | None = None,
 ) -> dict:
     packs = load_packs(packs_dir, enforce_phase1_minimums=True)
-    index = build_index(packs)
+    index = build_index(
+        packs,
+        vector_backend=vector_backend,
+        vector_db_path=vector_db_path,
+    )
     ingested_corpus = load_corpus_texts(corpus_dir)
     seed_files = _seed_files(seeds_dir, max_seeds=max_seeds)
 
@@ -243,6 +249,8 @@ def run_regression_batch(
             "min_moderation_hook_runs": min_moderation_hook_runs,
             "min_validation_warning_runs": min_validation_warning_runs,
             "orchestrator_backend": orchestrator_backend,
+            "vector_backend": vector_backend,
+            "vector_db_path": str(vector_db_path) if vector_db_path is not None else None,
         },
         "totals": {
             "seed_runs": len(run_summaries),
