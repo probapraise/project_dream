@@ -193,6 +193,10 @@ def test_web_api_list_runs_with_filters_and_pagination(tmp_path: Path):
     assert listed["total"] == 2
     listed_ids = [row["run_id"] for row in listed["items"]]
     assert set(listed_ids) == {run_first, run_second}
+    first_item = listed["items"][0]
+    assert "stage_retry_count" in first_item
+    assert "stage_failure_count" in first_item
+    assert "max_stage_attempts" in first_item
 
     filtered_seed = api.list_runs(seed_id="SEED-API-LIST-001")
     assert filtered_seed["count"] == 1

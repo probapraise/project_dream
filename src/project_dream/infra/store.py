@@ -9,6 +9,93 @@ from project_dream.storage import persist_eval as persist_eval_file
 from project_dream.storage import persist_run as persist_run_file
 
 
+def _coerce_non_negative_int(value: object, *, default: int = 0) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(0, parsed)
+
+
+def _extract_stage_trace_from_graph_node_trace(graph_node_trace: dict) -> dict:
+    stage_retry_count = 0
+    stage_failure_count = 0
+    max_stage_attempts = 0
+
+    node_attempts = graph_node_trace.get("node_attempts", {})
+    if isinstance(node_attempts, dict):
+        for raw_attempts in node_attempts.values():
+            max_stage_attempts = max(
+                max_stage_attempts,
+                _coerce_non_negative_int(raw_attempts, default=0),
+            )
+
+    stage_checkpoints = graph_node_trace.get("stage_checkpoints", [])
+    if isinstance(stage_checkpoints, list):
+        for row in stage_checkpoints:
+            if not isinstance(row, dict):
+                continue
+            outcome = str(row.get("outcome", ""))
+            if outcome == "retry":
+                stage_retry_count += 1
+            elif outcome == "failed":
+                stage_failure_count += 1
+            max_stage_attempts = max(
+                max_stage_attempts,
+                _coerce_non_negative_int(row.get("attempt"), default=0),
+            )
+
+    nodes = graph_node_trace.get("nodes", [])
+    if max_stage_attempts <= 0 and isinstance(nodes, list) and nodes:
+        max_stage_attempts = 1
+
+    return {
+        "stage_retry_count": stage_retry_count,
+        "stage_failure_count": stage_failure_count,
+        "max_stage_attempts": max_stage_attempts,
+    }
+
+
+def _extract_stage_trace_from_runlog_rows(rows: list[dict]) -> dict:
+    stage_retry_count = 0
+    stage_failure_count = 0
+    max_stage_attempts = 0
+    saw_graph_node = False
+
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        row_type = str(row.get("type", ""))
+        if row_type == "graph_node":
+            saw_graph_node = True
+            continue
+        if row_type == "graph_node_attempt":
+            max_stage_attempts = max(
+                max_stage_attempts,
+                _coerce_non_negative_int(row.get("attempts"), default=0),
+            )
+            continue
+        if row_type == "stage_checkpoint":
+            outcome = str(row.get("outcome", ""))
+            if outcome == "retry":
+                stage_retry_count += 1
+            elif outcome == "failed":
+                stage_failure_count += 1
+            max_stage_attempts = max(
+                max_stage_attempts,
+                _coerce_non_negative_int(row.get("attempt"), default=0),
+            )
+
+    if max_stage_attempts <= 0 and saw_graph_node:
+        max_stage_attempts = 1
+
+    return {
+        "stage_retry_count": stage_retry_count,
+        "stage_failure_count": stage_failure_count,
+        "max_stage_attempts": max_stage_attempts,
+    }
+
+
 class RunRepository(Protocol):
     runs_dir: Path
 
@@ -111,12 +198,14 @@ class FileRunRepository:
         status = ""
         termination_reason = ""
         total_reports = 0
+        runlog_rows: list[dict] = []
 
         if runlog_path.exists():
             for line in runlog_path.read_text(encoding="utf-8").splitlines():
                 if not line.strip():
                     continue
                 row = json.loads(line)
+                runlog_rows.append(row)
                 row_type = str(row.get("type", ""))
 
                 if row_type == "context":
@@ -135,7 +224,12 @@ class FileRunRepository:
                 elif row_type == "moderation_decision":
                     if not status:
                         status = str(row.get("status_after", ""))
-                    total_reports = max(total_reports, int(row.get("report_total", 0)))
+                    total_reports = max(
+                        total_reports,
+                        _coerce_non_negative_int(row.get("report_total"), default=0),
+                    )
+
+        stage_trace = _extract_stage_trace_from_runlog_rows(runlog_rows)
 
         created_at = datetime.fromtimestamp(run_dir.stat().st_mtime, tz=UTC).isoformat()
         report_gate = report.get("report_gate", {}) if isinstance(report, dict) else {}
@@ -156,6 +250,9 @@ class FileRunRepository:
             "status": status,
             "termination_reason": termination_reason,
             "total_reports": total_reports,
+            "stage_retry_count": stage_trace["stage_retry_count"],
+            "stage_failure_count": stage_trace["stage_failure_count"],
+            "max_stage_attempts": stage_trace["max_stage_attempts"],
             "report_gate_pass": report_gate_pass,
             "eval_pass": eval_pass,
         }
@@ -316,6 +413,9 @@ class SQLiteRunRepository:
                     status TEXT,
                     termination_reason TEXT,
                     total_reports INTEGER DEFAULT 0,
+                    stage_retry_count INTEGER DEFAULT 0,
+                    stage_failure_count INTEGER DEFAULT 0,
+                    max_stage_attempts INTEGER DEFAULT 0,
                     report_gate_pass INTEGER,
                     eval_pass INTEGER
                 )
@@ -347,11 +447,24 @@ class SQLiteRunRepository:
                 ON regression_summaries (generated_at_utc DESC)
                 """
             )
+            columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(runs)").fetchall()}
+            if "stage_retry_count" not in columns:
+                conn.execute("ALTER TABLE runs ADD COLUMN stage_retry_count INTEGER DEFAULT 0")
+            if "stage_failure_count" not in columns:
+                conn.execute("ALTER TABLE runs ADD COLUMN stage_failure_count INTEGER DEFAULT 0")
+            if "max_stage_attempts" not in columns:
+                conn.execute("ALTER TABLE runs ADD COLUMN max_stage_attempts INTEGER DEFAULT 0")
             conn.commit()
 
     def _upsert_run_index(self, run_dir: Path, sim_result: dict, report: dict) -> None:
         thread_state = sim_result.get("thread_state", {}) if isinstance(sim_result, dict) else {}
         report_gate = report.get("report_gate", {}) if isinstance(report, dict) else {}
+        graph_node_trace = sim_result.get("graph_node_trace", {}) if isinstance(sim_result, dict) else {}
+        stage_trace = (
+            _extract_stage_trace_from_graph_node_trace(graph_node_trace)
+            if isinstance(graph_node_trace, dict)
+            else {"stage_retry_count": 0, "stage_failure_count": 0, "max_stage_attempts": 0}
+        )
         created_at_utc = datetime.now(UTC).isoformat()
 
         with self._connect() as conn:
@@ -359,9 +472,10 @@ class SQLiteRunRepository:
                 """
                 INSERT INTO runs (
                     run_id, run_dir, created_at_utc, seed_id, board_id, zone_id, status,
-                    termination_reason, total_reports, report_gate_pass, eval_pass
+                    termination_reason, total_reports, stage_retry_count, stage_failure_count,
+                    max_stage_attempts, report_gate_pass, eval_pass
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(run_id) DO UPDATE SET
                     run_dir=excluded.run_dir,
                     created_at_utc=excluded.created_at_utc,
@@ -371,6 +485,9 @@ class SQLiteRunRepository:
                     status=excluded.status,
                     termination_reason=excluded.termination_reason,
                     total_reports=excluded.total_reports,
+                    stage_retry_count=excluded.stage_retry_count,
+                    stage_failure_count=excluded.stage_failure_count,
+                    max_stage_attempts=excluded.max_stage_attempts,
                     report_gate_pass=excluded.report_gate_pass
                 """,
                 (
@@ -383,6 +500,9 @@ class SQLiteRunRepository:
                     str(thread_state.get("status", "")),
                     str(thread_state.get("termination_reason", "")),
                     int(thread_state.get("total_reports", 0)),
+                    int(stage_trace["stage_retry_count"]),
+                    int(stage_trace["stage_failure_count"]),
+                    int(stage_trace["max_stage_attempts"]),
                     int(bool(report_gate.get("pass_fail"))) if isinstance(report_gate, dict) else 0,
                     None,
                 ),
@@ -483,7 +603,8 @@ class SQLiteRunRepository:
             rows = conn.execute(
                 f"""
                 SELECT run_id, run_dir, created_at_utc, seed_id, board_id, zone_id, status,
-                       termination_reason, total_reports, report_gate_pass, eval_pass
+                       termination_reason, total_reports, stage_retry_count, stage_failure_count,
+                       max_stage_attempts, report_gate_pass, eval_pass
                 FROM runs
                 {where_clause}
                 ORDER BY created_at_utc DESC
@@ -507,6 +628,9 @@ class SQLiteRunRepository:
                     "status": str(row["status"] or ""),
                     "termination_reason": str(row["termination_reason"] or ""),
                     "total_reports": int(row["total_reports"] or 0),
+                    "stage_retry_count": int(row["stage_retry_count"] or 0),
+                    "stage_failure_count": int(row["stage_failure_count"] or 0),
+                    "max_stage_attempts": int(row["max_stage_attempts"] or 0),
                     "report_gate_pass": (
                         bool(int(report_gate_raw)) if report_gate_raw is not None else None
                     ),

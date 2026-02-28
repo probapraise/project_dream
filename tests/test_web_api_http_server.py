@@ -204,6 +204,9 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
         assert runs_list["count"] >= 1
         assert runs_list["total"] >= 1
         assert any(row["run_id"] == sim["run_id"] for row in runs_list["items"])
+        assert "stage_retry_count" in runs_list["items"][0]
+        assert "stage_failure_count" in runs_list["items"][0]
+        assert "max_stage_attempts" in runs_list["items"][0]
 
         status, runs_filtered = _request_json("GET", f"{base}/runs?seed_id=SEED-HTTP-001", headers=auth)
         assert status == 200
