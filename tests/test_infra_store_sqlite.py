@@ -177,3 +177,40 @@ def test_sqlite_run_repository_lists_runs_with_filters_and_pagination(tmp_path: 
     assert paged["limit"] == 1
     assert paged["offset"] == 1
     assert paged["items"][0]["run_id"] == run_first.name
+
+
+def test_sqlite_run_repository_uses_indexed_regression_summaries_when_file_missing(tmp_path: Path):
+    repo = SQLiteRunRepository(tmp_path / "runs")
+    regressions_dir = tmp_path / "runs" / "regressions"
+    regressions_dir.mkdir(parents=True, exist_ok=True)
+
+    summary_path = regressions_dir / "regression-20260228-000000-000001.json"
+    summary = {
+        "schema_version": "regression.v1",
+        "metric_set": "v2",
+        "generated_at_utc": "2026-02-28T00:00:00+00:00",
+        "pass_fail": True,
+        "totals": {"seed_runs": 2},
+        "gates": {"format_missing_zero": True},
+        "runs": [],
+        "summary_path": str(summary_path),
+    }
+    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    repo.persist_regression_summary(summary)
+
+    summary_path.unlink()
+
+    listed = repo.list_regression_summaries()
+    assert listed["count"] == 1
+    assert listed["items"][0]["summary_id"] == summary_path.name
+    assert listed["items"][0]["metric_set"] == "v2"
+    assert listed["items"][0]["seed_runs"] == 2
+
+    latest = repo.load_latest_regression_summary()
+    assert latest["schema_version"] == "regression.v1"
+    assert latest["metric_set"] == "v2"
+    assert latest["summary_path"].endswith(summary_path.name)
+
+    loaded = repo.load_regression_summary(summary_path.stem)
+    assert loaded["schema_version"] == "regression.v1"
+    assert loaded["totals"]["seed_runs"] == 2

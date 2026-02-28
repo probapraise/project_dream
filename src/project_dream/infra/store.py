@@ -44,6 +44,9 @@ class RunRepository(Protocol):
     def load_runlog(self, run_id: str) -> dict:
         ...
 
+    def persist_regression_summary(self, summary: dict) -> None:
+        ...
+
     def load_latest_regression_summary(self) -> dict:
         ...
 
@@ -206,6 +209,10 @@ class FileRunRepository:
             rows.append(json.loads(line))
         return {"run_id": run_id, "rows": rows}
 
+    def persist_regression_summary(self, summary: dict) -> None:
+        # File backend keeps regression metadata as files only.
+        return None
+
     def load_latest_regression_summary(self) -> dict:
         regressions_dir = self.runs_dir / "regressions"
         summary_files = sorted(regressions_dir.glob("regression-*.json"))
@@ -290,6 +297,26 @@ class SQLiteRunRepository:
                 """
                 CREATE INDEX IF NOT EXISTS idx_runs_created_at
                 ON runs (created_at_utc DESC)
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS regression_summaries (
+                    summary_id TEXT PRIMARY KEY,
+                    summary_path TEXT NOT NULL,
+                    generated_at_utc TEXT,
+                    metric_set TEXT,
+                    pass_fail INTEGER,
+                    seed_runs INTEGER DEFAULT 0,
+                    payload_json TEXT NOT NULL,
+                    indexed_at_utc TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_regression_summaries_generated_at
+                ON regression_summaries (generated_at_utc DESC)
                 """
             )
             conn.commit()
@@ -493,7 +520,102 @@ class SQLiteRunRepository:
             rows.append(json.loads(line))
         return {"run_id": run_id, "rows": rows}
 
+    def _sync_regression_indexes_from_files(self) -> None:
+        regressions_dir = self.runs_dir / "regressions"
+        if not regressions_dir.exists():
+            return
+
+        for path in sorted(regressions_dir.glob("regression-*.json")):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                continue
+            payload.setdefault("summary_path", str(path))
+            self.persist_regression_summary(payload)
+
+    def persist_regression_summary(self, summary: dict) -> None:
+        summary_path_value = str(summary.get("summary_path", "")).strip()
+        if summary_path_value:
+            summary_path = Path(summary_path_value)
+        else:
+            generated = datetime.now(UTC).strftime("regression-%Y%m%d-%H%M%S-%f.json")
+            summary_path = self.runs_dir / "regressions" / generated
+
+        summary_id = summary_path.name
+        payload = dict(summary)
+        payload.setdefault("summary_path", str(summary_path))
+        totals = payload.get("totals", {})
+        generated_at_utc = str(payload.get("generated_at_utc", ""))
+        metric_set = str(payload.get("metric_set", ""))
+        pass_fail = int(bool(payload.get("pass_fail")))
+        seed_runs = int(totals.get("seed_runs", 0)) if isinstance(totals, dict) else 0
+        payload_json = json.dumps(payload, ensure_ascii=False)
+        indexed_at_utc = datetime.now(UTC).isoformat()
+
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO regression_summaries (
+                    summary_id, summary_path, generated_at_utc, metric_set,
+                    pass_fail, seed_runs, payload_json, indexed_at_utc
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(summary_id) DO UPDATE SET
+                    summary_path=excluded.summary_path,
+                    generated_at_utc=excluded.generated_at_utc,
+                    metric_set=excluded.metric_set,
+                    pass_fail=excluded.pass_fail,
+                    seed_runs=excluded.seed_runs,
+                    payload_json=excluded.payload_json,
+                    indexed_at_utc=excluded.indexed_at_utc
+                """,
+                (
+                    summary_id,
+                    str(summary_path),
+                    generated_at_utc,
+                    metric_set,
+                    pass_fail,
+                    seed_runs,
+                    payload_json,
+                    indexed_at_utc,
+                ),
+            )
+            conn.commit()
+
+    def _load_indexed_regression_summary(self, summary_filename: str) -> dict | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT summary_path, payload_json
+                FROM regression_summaries
+                WHERE summary_id = ?
+                """,
+                (summary_filename,),
+            ).fetchone()
+        if row is None:
+            return None
+
+        payload_raw = str(row["payload_json"] or "").strip()
+        if not payload_raw:
+            return None
+        payload = json.loads(payload_raw)
+        payload.setdefault("summary_path", str(row["summary_path"]))
+        return payload
+
     def load_latest_regression_summary(self) -> dict:
+        self._sync_regression_indexes_from_files()
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT summary_id
+                FROM regression_summaries
+                ORDER BY COALESCE(generated_at_utc, indexed_at_utc) DESC, summary_id DESC
+                LIMIT 1
+                """
+            ).fetchone()
+        if row is not None:
+            return self.load_regression_summary(str(row["summary_id"]))
+
         regressions_dir = self.runs_dir / "regressions"
         summary_files = sorted(regressions_dir.glob("regression-*.json"))
         if not summary_files:
@@ -508,16 +630,55 @@ class SQLiteRunRepository:
 
         filename = summary_id if summary_id.endswith(".json") else f"{summary_id}.json"
         path = self.runs_dir / "regressions" / filename
-        if not path.exists():
-            raise FileNotFoundError(f"Regression summary not found: {summary_id}")
+        if path.exists():
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload.setdefault("summary_path", str(path))
+            self.persist_regression_summary(payload)
+            return payload
 
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        payload.setdefault("summary_path", str(path))
-        return payload
+        indexed_payload = self._load_indexed_regression_summary(filename)
+        if indexed_payload is not None:
+            return indexed_payload
+        raise FileNotFoundError(f"Regression summary not found: {summary_id}")
 
     def list_regression_summaries(self, limit: int | None = None) -> dict:
         if limit is not None and limit < 1:
             raise ValueError(f"Invalid limit: {limit}")
+
+        self._sync_regression_indexes_from_files()
+        with self._connect() as conn:
+            if limit is None:
+                rows = conn.execute(
+                    """
+                    SELECT summary_id, summary_path, generated_at_utc, metric_set, pass_fail, seed_runs
+                    FROM regression_summaries
+                    ORDER BY COALESCE(generated_at_utc, indexed_at_utc) DESC, summary_id DESC
+                    """
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT summary_id, summary_path, generated_at_utc, metric_set, pass_fail, seed_runs
+                    FROM regression_summaries
+                    ORDER BY COALESCE(generated_at_utc, indexed_at_utc) DESC, summary_id DESC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                ).fetchall()
+
+        if rows:
+            items = [
+                {
+                    "summary_id": str(row["summary_id"]),
+                    "summary_path": str(row["summary_path"]),
+                    "generated_at_utc": row["generated_at_utc"],
+                    "metric_set": row["metric_set"],
+                    "pass_fail": bool(int(row["pass_fail"])),
+                    "seed_runs": int(row["seed_runs"] or 0),
+                }
+                for row in rows
+            ]
+            return {"count": len(items), "items": items}
 
         regressions_dir = self.runs_dir / "regressions"
         summary_files = sorted(regressions_dir.glob("regression-*.json"), reverse=True)

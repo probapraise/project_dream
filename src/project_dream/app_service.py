@@ -87,7 +87,7 @@ def regress_and_persist(
     min_validation_warning_runs: int = 1,
     orchestrator_backend: str = "manual",
 ) -> dict:
-    return run_regression_batch(
+    summary = run_regression_batch(
         seeds_dir=seeds_dir,
         packs_dir=packs_dir,
         corpus_dir=corpus_dir,
@@ -101,3 +101,5 @@ def regress_and_persist(
         min_validation_warning_runs=min_validation_warning_runs,
         orchestrator_backend=orchestrator_backend,
     )
+    repository.persist_regression_summary(summary)
+    return summary
