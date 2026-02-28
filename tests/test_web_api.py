@@ -150,6 +150,46 @@ def test_web_api_read_endpoints(tmp_path: Path):
     assert any(row.get("type") == "context" for row in runlog["rows"])
 
 
+def test_web_api_list_runs_with_filters_and_pagination(tmp_path: Path):
+    repo = FileRunRepository(tmp_path / "runs")
+    api = ProjectDreamAPI(repository=repo, packs_dir=Path("packs"))
+
+    run_first = api.simulate(
+        {
+            "seed_id": "SEED-API-LIST-001",
+            "title": "api list 1",
+            "summary": "api list summary 1",
+            "board_id": "B07",
+            "zone_id": "D",
+        },
+        rounds=3,
+    )["run_id"]
+    run_second = api.simulate(
+        {
+            "seed_id": "SEED-API-LIST-002",
+            "title": "api list 2",
+            "summary": "api list summary 2",
+            "board_id": "B07",
+            "zone_id": "D",
+        },
+        rounds=3,
+    )["run_id"]
+
+    listed = api.list_runs()
+    assert listed["count"] == 2
+    assert listed["total"] == 2
+    assert [row["run_id"] for row in listed["items"]] == [run_second, run_first]
+
+    filtered_seed = api.list_runs(seed_id="SEED-API-LIST-001")
+    assert filtered_seed["count"] == 1
+    assert filtered_seed["items"][0]["run_id"] == run_first
+
+    paged = api.list_runs(limit=1, offset=1)
+    assert paged["count"] == 1
+    assert paged["total"] == 2
+    assert paged["items"][0]["run_id"] == run_first
+
+
 def test_web_api_kb_query_methods(tmp_path: Path):
     repo = FileRunRepository(tmp_path / "runs")
     api = ProjectDreamAPI(repository=repo, packs_dir=Path("packs"))

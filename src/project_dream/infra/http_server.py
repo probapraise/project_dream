@@ -87,6 +87,26 @@ def create_server(
                     self._send(200, api.latest_run())
                     return
 
+                if path == "/runs":
+                    limit_raw = query.get("limit", [None])[0]
+                    offset_raw = query.get("offset", [None])[0]
+                    limit = 20 if limit_raw in (None, "") else int(limit_raw)
+                    offset = 0 if offset_raw in (None, "") else int(offset_raw)
+                    seed_id = query.get("seed_id", [None])[0] or None
+                    board_id = query.get("board_id", [None])[0] or None
+                    status_filter = query.get("status", [None])[0] or None
+                    self._send(
+                        200,
+                        api.list_runs(
+                            limit=limit,
+                            offset=offset,
+                            seed_id=seed_id,
+                            board_id=board_id,
+                            status=status_filter,
+                        ),
+                    )
+                    return
+
                 if path == "/regressions":
                     limit_raw = query.get("limit", [None])[0]
                     limit = None if limit_raw in (None, "") else int(limit_raw)

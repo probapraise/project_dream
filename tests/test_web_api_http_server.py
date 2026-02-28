@@ -179,6 +179,23 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
         }
         assert latest["run_id"] in known_run_ids
 
+        status, runs_list = _request_json("GET", f"{base}/runs", headers=auth)
+        assert status == 200
+        assert runs_list["count"] >= 1
+        assert runs_list["total"] >= 1
+        assert any(row["run_id"] == sim["run_id"] for row in runs_list["items"])
+
+        status, runs_filtered = _request_json("GET", f"{base}/runs?seed_id=SEED-HTTP-001", headers=auth)
+        assert status == 200
+        assert runs_filtered["count"] >= 1
+        assert any(row["run_id"] == sim["run_id"] for row in runs_filtered["items"])
+
+        status, runs_paged = _request_json("GET", f"{base}/runs?limit=1&offset=0", headers=auth)
+        assert status == 200
+        assert runs_paged["count"] == 1
+        assert runs_paged["limit"] == 1
+        assert runs_paged["offset"] == 0
+
         status, report = _request_json("GET", f"{base}/runs/{sim['run_id']}/report", headers=auth)
         assert status == 200
         assert report["schema_version"] == "report.v1"
