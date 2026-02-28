@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -8,8 +9,46 @@ from project_dream.data_ingest import load_corpus_rows
 from project_dream.pack_service import LoadedPacks
 
 
-def _tokenize(text: str) -> set[str]:
-    return set(re.findall(r"[0-9A-Za-z가-힣_]+", text.lower()))
+def _tokenize(text: str) -> list[str]:
+    return re.findall(r"[0-9A-Za-z가-힣_]+", text.lower())
+
+
+def _term_freq(tokens: list[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for token in tokens:
+        counts[token] = counts.get(token, 0) + 1
+    return counts
+
+
+def _normalize_dense_text(text: str) -> str:
+    return "".join(_tokenize(text))
+
+
+def _char_ngrams(text: str, n: int = 2) -> dict[str, float]:
+    normalized = _normalize_dense_text(text)
+    if not normalized:
+        return {}
+    if len(normalized) <= n:
+        return {normalized: 1.0}
+    counts: dict[str, float] = {}
+    for idx in range(0, len(normalized) - n + 1):
+        gram = normalized[idx : idx + n]
+        counts[gram] = counts.get(gram, 0.0) + 1.0
+    return counts
+
+
+def _cosine_similarity(a: dict[str, float], b: dict[str, float]) -> float:
+    if not a or not b:
+        return 0.0
+    common = set(a.keys()).intersection(b.keys())
+    if not common:
+        return 0.0
+    dot = sum(a[key] * b[key] for key in common)
+    norm_a = math.sqrt(sum(value * value for value in a.values()))
+    norm_b = math.sqrt(sum(value * value for value in b.values()))
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 0.0
+    return float(dot / (norm_a * norm_b))
 
 
 def _stringify(value: Any) -> str:
@@ -49,14 +88,54 @@ def _matches_filters(row: dict, filters: dict[str, Any]) -> bool:
     return True
 
 
-def _score(query: str, text: str) -> int:
+def _bm25_score(
+    query_tokens: list[str],
+    *,
+    doc_tf: dict[str, int],
+    doc_len: int,
+    df: dict[str, int],
+    doc_count: int,
+    avg_doc_len: float,
+    k1: float = 1.2,
+    b: float = 0.75,
+) -> float:
+    if not query_tokens or doc_count <= 0:
+        return 0.0
+    score = 0.0
+    unique_query_tokens = set(query_tokens)
+    for term in unique_query_tokens:
+        tf = doc_tf.get(term, 0)
+        if tf <= 0:
+            continue
+        term_df = df.get(term, 0)
+        idf = math.log(1.0 + ((doc_count - term_df + 0.5) / (term_df + 0.5)))
+        denom = tf + (k1 * (1 - b + (b * (doc_len / max(avg_doc_len, 1e-9)))))
+        score += idf * ((tf * (k1 + 1.0)) / max(denom, 1e-9))
+    return float(score)
+
+
+def _score_components(
+    query: str,
+    row: dict,
+    *,
+    df: dict[str, int],
+    doc_count: int,
+    avg_doc_len: float,
+) -> tuple[float, float, float]:
     query_tokens = _tokenize(query)
-    if not query_tokens:
-        return 0
-    text_tokens = _tokenize(text)
-    overlap = len(query_tokens.intersection(text_tokens))
-    phrase_bonus = 2 if query and query.lower() in text.lower() else 0
-    return overlap + phrase_bonus
+    sparse = _bm25_score(
+        query_tokens,
+        doc_tf=row.get("_token_tf", {}),
+        doc_len=int(row.get("_doc_len", 0)),
+        df=df,
+        doc_count=doc_count,
+        avg_doc_len=avg_doc_len,
+    )
+    dense = _cosine_similarity(_char_ngrams(query, n=2), row.get("_dense_vector", {}))
+    phrase_bonus = 0.15 if _normalize_dense_text(query) in str(row.get("_normalized_text", "")) else 0.0
+    sparse_norm = 1.0 - math.exp(-max(0.0, sparse))
+    hybrid = (0.65 * sparse_norm) + (0.35 * dense) + phrase_bonus
+    return sparse, dense, hybrid
 
 
 def build_index(packs: LoadedPacks, corpus_dir: Path | None = None) -> dict[str, Any]:
@@ -167,6 +246,9 @@ def build_index(packs: LoadedPacks, corpus_dir: Path | None = None) -> dict[str,
                         "intended_boards",
                         "default_comment_flow",
                         "crosspost_routes",
+                        "title_patterns",
+                        "trigger_tags",
+                        "taboos",
                     ],
                 ),
             }
@@ -191,7 +273,34 @@ def build_index(packs: LoadedPacks, corpus_dir: Path | None = None) -> dict[str,
                 }
             )
 
-    return {"passages": passages, "packs": packs}
+    df: dict[str, int] = {}
+    total_doc_len = 0
+    for row in passages:
+        text = str(row.get("text", ""))
+        tokens = _tokenize(text)
+        token_tf = _term_freq(tokens)
+        unique_tokens = set(tokens)
+        for token in unique_tokens:
+            df[token] = df.get(token, 0) + 1
+        doc_len = len(tokens)
+        total_doc_len += doc_len
+        row["_tokens"] = tokens
+        row["_token_tf"] = token_tf
+        row["_doc_len"] = doc_len
+        row["_normalized_text"] = _normalize_dense_text(text)
+        row["_dense_vector"] = _char_ngrams(text, n=2)
+
+    doc_count = len(passages)
+    avg_doc_len = (total_doc_len / doc_count) if doc_count > 0 else 0.0
+    return {
+        "passages": passages,
+        "packs": packs,
+        "stats": {
+            "df": df,
+            "doc_count": doc_count,
+            "avg_doc_len": avg_doc_len,
+        },
+    }
 
 
 def search(
@@ -204,15 +313,31 @@ def search(
         return []
     filters = filters or {}
     passages = index.get("passages", [])
+    stats = index.get("stats", {})
+    df: dict[str, int] = stats.get("df", {})
+    doc_count: int = int(stats.get("doc_count", len(passages)))
+    avg_doc_len: float = float(stats.get("avg_doc_len", 0.0))
     matched = [row for row in passages if _matches_filters(row, filters)]
 
-    scored: list[tuple[int, dict]] = [(_score(query, row["text"]), row) for row in matched]
-    scored.sort(key=lambda item: (-item[0], item[1]["kind"], item[1]["item_id"]))
+    scored: list[tuple[float, float, float, dict]] = []
+    for row in matched:
+        sparse, dense, hybrid = _score_components(
+            query,
+            row,
+            df=df,
+            doc_count=doc_count,
+            avg_doc_len=avg_doc_len,
+        )
+        scored.append((hybrid, sparse, dense, row))
+    scored.sort(key=lambda item: (-item[0], -item[1], -item[2], item[3]["kind"], item[3]["item_id"]))
 
     results: list[dict] = []
-    for score, row in scored[:top_k]:
-        copied = dict(row)
-        copied["score"] = score
+    for hybrid, sparse, dense, row in scored[:top_k]:
+        copied = {key: value for key, value in row.items() if not str(key).startswith("_")}
+        copied["score"] = float(round(hybrid, 6))
+        copied["score_hybrid"] = float(round(hybrid, 6))
+        copied["score_sparse"] = float(round(sparse, 6))
+        copied["score_dense"] = float(round(dense, 6))
         results.append(copied)
     return results
 

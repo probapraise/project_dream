@@ -19,6 +19,9 @@ def test_search_filters_board_and_kind():
     assert results[0]["item_id"] == "B07"
     assert all(row["board_id"] == "B07" for row in results)
     assert all(row["kind"] == "board" for row in results)
+    assert "score_sparse" in results[0]
+    assert "score_dense" in results[0]
+    assert "score_hybrid" in results[0]
 
 
 def test_search_filters_zone_and_persona():
@@ -112,3 +115,21 @@ def test_retrieve_context_includes_ingested_corpus_when_available(tmp_path: Path
     )
 
     assert any("INGEST-EVIDENCE-B07" in text for text in result["corpus"])
+
+
+def test_search_hybrid_recovers_spacing_variant_with_dense_signal():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    index = build_index(packs)
+
+    # board B17 meme contains "정렬이진실". query uses spacing variant.
+    results = search(
+        index,
+        query="정렬이 진실",
+        filters={"kind": "board"},
+        top_k=3,
+    )
+
+    assert results
+    assert results[0]["item_id"] == "B17"
+    assert float(results[0]["score_dense"]) > 0.0
+    assert float(results[0]["score_hybrid"]) >= float(results[0]["score_sparse"])
