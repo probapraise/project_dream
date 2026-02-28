@@ -41,8 +41,10 @@ def test_run_regression_batch_produces_summary_and_passes(tmp_path: Path):
     assert summary["schema_version"] == "regression.v1"
     assert summary["metric_set"] == "v1"
     assert summary["totals"]["seed_runs"] == 2
+    assert summary["totals"]["context_trace_runs"] == 2
     assert summary["pass_fail"] is True
     assert "format_missing_zero" in summary["gates"]
+    assert summary["gates"]["context_trace_runs"] is True
     summary_path = Path(summary["summary_path"])
     assert summary_path.exists()
 

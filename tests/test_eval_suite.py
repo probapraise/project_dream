@@ -8,6 +8,11 @@ def _write_valid_run(run_dir: Path) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
     runlog = run_dir / "runlog.jsonl"
     rows = [
+        {
+            "type": "context",
+            "bundle": {"board_id": "B01", "zone_id": "A"},
+            "corpus": ["ctx-1"],
+        },
         {"type": "round", "round": 1, "community_id": "COM-PLZ-001"},
         {"type": "gate", "round": 1, "gates": [{"gate_name": "safety", "passed": True}]},
         {"type": "action", "round": 1, "action_type": "REPORT"},
@@ -61,3 +66,27 @@ def test_evaluate_run_fails_on_missing_required_sections(tmp_path: Path):
 
     assert result["pass_fail"] is False
     assert any(c["name"] == "report.required_sections" and c["passed"] is False for c in result["checks"])
+
+
+def test_evaluate_run_fails_when_context_trace_missing(tmp_path: Path):
+    run_dir = tmp_path / "runs" / "run-3"
+    _write_valid_run(run_dir)
+
+    rows = [
+        json.loads(line)
+        for line in (run_dir / "runlog.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    rows = [row for row in rows if row.get("type") != "context"]
+    (run_dir / "runlog.jsonl").write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in rows),
+        encoding="utf-8",
+    )
+
+    result = evaluate_run(run_dir)
+
+    assert result["pass_fail"] is False
+    assert any(
+        c["name"] == "runlog.context_trace_present" and c["passed"] is False
+        for c in result["checks"]
+    )

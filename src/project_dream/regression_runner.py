@@ -42,6 +42,14 @@ def _has_moderation_hook(sim_result: dict, report: dict) -> bool:
     return has_moderation and len(report.get("foreshadowing", [])) > 0
 
 
+def _has_context_trace(eval_result: dict) -> bool:
+    checks = eval_result.get("checks", [])
+    for check in checks:
+        if check.get("name") == "runlog.context_trace_present":
+            return bool(check.get("passed"))
+    return False
+
+
 def _write_summary(output_dir: Path, summary: dict) -> Path:
     summary_dir = output_dir / "regressions"
     summary_dir.mkdir(parents=True, exist_ok=True)
@@ -73,6 +81,7 @@ def run_regression_batch(
     conflict_frame_runs = 0
     moderation_hook_runs = 0
     validation_warning_runs = 0
+    context_trace_runs = 0
     eval_pass_runs = 0
 
     for seed_file in seed_files:
@@ -108,11 +117,13 @@ def run_regression_batch(
         has_conflict = _has_conflict_frames(report)
         has_moderation_hook = _has_moderation_hook(sim_result, report)
         has_validation_warning = len(report.get("risk_checks", [])) > 0
+        has_context_trace = _has_context_trace(eval_result)
 
         missing_required_sections_total += len(missing_sections)
         conflict_frame_runs += int(has_conflict)
         moderation_hook_runs += int(has_moderation_hook)
         validation_warning_runs += int(has_validation_warning)
+        context_trace_runs += int(has_context_trace)
         eval_pass_runs += int(bool(eval_result.get("pass_fail")))
 
         run_summaries.append(
@@ -126,6 +137,7 @@ def run_regression_batch(
                 "has_conflict_frames": has_conflict,
                 "has_moderation_hook": has_moderation_hook,
                 "has_validation_warning": has_validation_warning,
+                "has_context_trace": has_context_trace,
             }
         )
 
@@ -135,6 +147,7 @@ def run_regression_batch(
         "conflict_frame_runs": conflict_frame_runs >= min_conflict_frame_runs,
         "moderation_hook_runs": moderation_hook_runs >= min_moderation_hook_runs,
         "validation_warning_runs": validation_warning_runs >= min_validation_warning_runs,
+        "context_trace_runs": context_trace_runs == len(run_summaries),
     }
     pass_fail = all(gates.values())
 
@@ -162,6 +175,7 @@ def run_regression_batch(
             "conflict_frame_runs": conflict_frame_runs,
             "moderation_hook_runs": moderation_hook_runs,
             "validation_warning_runs": validation_warning_runs,
+            "context_trace_runs": context_trace_runs,
         },
         "gates": gates,
         "runs": run_summaries,

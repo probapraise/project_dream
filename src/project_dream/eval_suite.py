@@ -206,6 +206,15 @@ def evaluate_run(run_dir: Path, metric_set: str = "v1") -> dict:
         )
     )
 
+    context_rows = [row for row in runlog_rows if row.get("type") == "context"]
+    checks.append(
+        EvalCheck(
+            name="runlog.context_trace_present",
+            passed=len(context_rows) >= 1,
+            details=f"context_rows={len(context_rows)}",
+        )
+    )
+
     checks.append(
         EvalCheck(
             name="report.schema_version",
@@ -263,6 +272,7 @@ def evaluate_run(run_dir: Path, metric_set: str = "v1") -> dict:
         checks=checks,
         metrics={
             "runlog_rows": len(runlog_rows),
+            "context_rows": len(context_rows),
             "round_rows": sum(1 for row in runlog_rows if row.get("type") == "round"),
             "gate_rows": sum(1 for row in runlog_rows if row.get("type") == "gate"),
             "action_rows": sum(1 for row in runlog_rows if row.get("type") == "action"),
