@@ -29,6 +29,8 @@ def simulate_and_persist(
         top_k=3,
     )
     sim_result = run_simulation(seed=seed, rounds=rounds, corpus=context["corpus"], packs=packs)
+    sim_result["context_bundle"] = context["bundle"]
+    sim_result["context_corpus"] = context["corpus"]
     report = build_report_v1(seed, sim_result, packs)
     return repository.persist_run(sim_result, report)
 

@@ -1,5 +1,6 @@
 import json
 import threading
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -258,6 +259,10 @@ def test_http_server_emits_structured_access_logs(tmp_path: Path):
         _request_json("GET", f"{base}/health")
         _request_json("GET", f"{base}/runs/latest")
         _request_json("GET", f"{base}/runs/latest", headers=auth)
+
+        deadline = time.time() + 0.5
+        while len(access_logs) < 3 and time.time() < deadline:
+            time.sleep(0.01)
 
         assert len(access_logs) >= 3
         for entry in access_logs:

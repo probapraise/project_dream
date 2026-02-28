@@ -145,6 +145,7 @@ def test_web_api_read_endpoints(tmp_path: Path):
     assert eva["schema_version"] == "eval.v1"
     assert runlog["run_id"] == sim_res["run_id"]
     assert runlog["rows"]
+    assert any(row.get("type") == "context" for row in runlog["rows"])
 
 
 def test_web_api_kb_query_methods(tmp_path: Path):

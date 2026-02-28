@@ -59,6 +59,20 @@ def persist_run(output_dir: Path, sim_result: dict, report: dict) -> Path:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     with (run_dir / "runlog.jsonl").open("w", encoding="utf-8") as fp:
+        context_bundle = sim_result.get("context_bundle")
+        if context_bundle is not None:
+            fp.write(
+                json.dumps(
+                    {
+                        "type": "context",
+                        "bundle": context_bundle,
+                        "corpus": sim_result.get("context_corpus", []),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
         for row in sim_result["rounds"]:
             fp.write(json.dumps({"type": "round", **row}, ensure_ascii=False) + "\n")
         for row in sim_result.get("gate_logs", []):

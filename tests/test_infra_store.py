@@ -57,3 +57,29 @@ def test_file_run_repository_finds_latest_and_by_id(tmp_path: Path):
 
     assert latest == run_dir
     assert same == run_dir
+
+
+def test_file_run_repository_persists_context_row_when_present(tmp_path: Path):
+    repo = FileRunRepository(tmp_path / "runs")
+    sim_result = _sample_sim_result()
+    sim_result["context_bundle"] = {
+        "task": "거래 사기 의혹",
+        "seed": "중계망 장애",
+        "board_id": "B07",
+        "zone_id": "D",
+        "persona_ids": ["P07"],
+        "sections": {"evidence": [], "policy": [], "organization": [], "hierarchy": []},
+    }
+    sim_result["context_corpus"] = ["ctx-B07-D-1", "ctx-B07-D-2"]
+
+    run_dir = repo.persist_run(sim_result, _sample_report())
+
+    rows = [
+        json.loads(line)
+        for line in (run_dir / "runlog.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert rows
+    assert rows[0]["type"] == "context"
+    assert rows[0]["bundle"]["board_id"] == "B07"
+    assert rows[0]["corpus"] == ["ctx-B07-D-1", "ctx-B07-D-2"]
