@@ -1,5 +1,7 @@
 # Project Dream MVP
 
+Latest resume handoff: `docs/plans/2026-02-28-context-compression-handoff.md`
+
 ## Quickstart
 
 ```bash
