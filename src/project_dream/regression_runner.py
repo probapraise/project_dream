@@ -109,6 +109,7 @@ def run_regression_batch(
     stage_trace_runs = 0
     stage_trace_consistent_runs = 0
     stage_trace_ordered_runs = 0
+    stage_trace_coverage_sum = 0.0
     eval_pass_runs = 0
 
     for seed_file in seed_files:
@@ -148,6 +149,7 @@ def run_regression_batch(
         has_stage_trace = _has_stage_trace(eval_result)
         has_stage_trace_consistency = _has_stage_trace_consistency(eval_result)
         has_stage_trace_ordering = _has_stage_trace_ordering(eval_result)
+        stage_trace_coverage_rate = float(eval_result.get("metrics", {}).get("stage_trace_coverage_rate", 0.0))
 
         missing_required_sections_total += len(missing_sections)
         conflict_frame_runs += int(has_conflict)
@@ -157,6 +159,7 @@ def run_regression_batch(
         stage_trace_runs += int(has_stage_trace)
         stage_trace_consistent_runs += int(has_stage_trace_consistency)
         stage_trace_ordered_runs += int(has_stage_trace_ordering)
+        stage_trace_coverage_sum += stage_trace_coverage_rate
         eval_pass_runs += int(bool(eval_result.get("pass_fail")))
 
         run_summaries.append(
@@ -174,8 +177,14 @@ def run_regression_batch(
                 "has_stage_trace": has_stage_trace,
                 "has_stage_trace_consistency": has_stage_trace_consistency,
                 "has_stage_trace_ordering": has_stage_trace_ordering,
+                "stage_trace_coverage_rate": stage_trace_coverage_rate,
             }
         )
+
+    seed_runs = len(run_summaries)
+    avg_stage_trace_coverage_rate = (
+        float(round(stage_trace_coverage_sum / seed_runs, 4)) if seed_runs > 0 else 0.0
+    )
 
     gates = {
         "format_missing_zero": missing_required_sections_total == 0,
@@ -187,6 +196,7 @@ def run_regression_batch(
         "stage_trace_runs": stage_trace_runs == len(run_summaries),
         "stage_trace_consistent_runs": stage_trace_consistent_runs == len(run_summaries),
         "stage_trace_ordered_runs": stage_trace_ordered_runs == len(run_summaries),
+        "stage_trace_coverage_rate": avg_stage_trace_coverage_rate >= 1.0,
     }
     pass_fail = all(gates.values())
 
@@ -218,6 +228,7 @@ def run_regression_batch(
             "stage_trace_runs": stage_trace_runs,
             "stage_trace_consistent_runs": stage_trace_consistent_runs,
             "stage_trace_ordered_runs": stage_trace_ordered_runs,
+            "avg_stage_trace_coverage_rate": avg_stage_trace_coverage_rate,
         },
         "gates": gates,
         "runs": run_summaries,

@@ -249,6 +249,22 @@ def evaluate_run(run_dir: Path, metric_set: str = "v1") -> dict:
     if end_conditions:
         ended_round = int(end_conditions[0].get("ended_round", 0))
 
+    expected_rounds = ended_round if ended_round and ended_round > 0 else len(round_ids)
+    if expected_rounds > 0:
+        round_summary_coverage = min(stage_type_counts.get("round_summary", 0), expected_rounds) / expected_rounds
+        moderation_coverage = min(stage_type_counts.get("moderation_decision", 0), expected_rounds) / expected_rounds
+    else:
+        round_summary_coverage = 0.0
+        moderation_coverage = 0.0
+    stage_trace_coverage_rate = (
+        (1.0 if stage_type_counts.get("thread_candidate", 0) >= 1 else 0.0)
+        + (1.0 if stage_type_counts.get("thread_selected", 0) >= 1 else 0.0)
+        + (1.0 if stage_type_counts.get("end_condition", 0) >= 1 else 0.0)
+        + round_summary_coverage
+        + moderation_coverage
+    ) / 5.0
+    stage_trace_coverage_rate = float(round(stage_trace_coverage_rate, 4))
+
     stage_trace_consistent = (
         len(end_conditions) == 1
         and ended_round is not None
@@ -423,6 +439,7 @@ def evaluate_run(run_dir: Path, metric_set: str = "v1") -> dict:
             "runlog_rows": len(runlog_rows),
             "context_rows": len(context_rows),
             "stage_trace_rows": sum(stage_type_counts.values()),
+            "stage_trace_coverage_rate": stage_trace_coverage_rate,
             "stage_trace_consistent": int(stage_trace_consistent),
             "stage_trace_ordered": int(stage_trace_ordered),
             "round_rows": sum(1 for row in runlog_rows if row.get("type") == "round"),
