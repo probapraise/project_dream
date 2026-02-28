@@ -120,3 +120,60 @@ def test_sqlite_run_repository_get_run_raises_for_missing_id(tmp_path: Path):
     except FileNotFoundError:
         return
     assert False, "expected FileNotFoundError"
+
+
+def test_sqlite_run_repository_lists_runs_with_filters_and_pagination(tmp_path: Path):
+    repo = SQLiteRunRepository(tmp_path / "runs")
+
+    sim_first = _sample_sim_result()
+    sim_first["thread_state"] = {
+        "board_id": "B07",
+        "zone_id": "D",
+        "status": "visible",
+        "termination_reason": "round_limit",
+        "total_reports": 0,
+    }
+    report_first = _sample_report()
+    report_first["seed_id"] = "SEED-SQLITE-LIST-1"
+    report_first["report_gate"] = {"pass_fail": True}
+
+    sim_second = _sample_sim_result()
+    sim_second["thread_state"] = {
+        "board_id": "B08",
+        "zone_id": "D",
+        "status": "locked",
+        "termination_reason": "moderation_lock",
+        "total_reports": 3,
+    }
+    report_second = _sample_report()
+    report_second["seed_id"] = "SEED-SQLITE-LIST-2"
+    report_second["report_gate"] = {"pass_fail": False}
+
+    run_first = repo.persist_run(sim_first, report_first)
+    run_second = repo.persist_run(sim_second, report_second)
+
+    listed = repo.list_runs()
+    assert listed["count"] == 2
+    assert listed["total"] == 2
+    assert listed["limit"] == 20
+    assert listed["offset"] == 0
+    assert [row["run_id"] for row in listed["items"]] == [run_second.name, run_first.name]
+
+    filtered_seed = repo.list_runs(seed_id="SEED-SQLITE-LIST-1")
+    assert filtered_seed["count"] == 1
+    assert filtered_seed["items"][0]["run_id"] == run_first.name
+
+    filtered_board = repo.list_runs(board_id="B08")
+    assert filtered_board["count"] == 1
+    assert filtered_board["items"][0]["run_id"] == run_second.name
+
+    filtered_status = repo.list_runs(status="locked")
+    assert filtered_status["count"] == 1
+    assert filtered_status["items"][0]["run_id"] == run_second.name
+
+    paged = repo.list_runs(limit=1, offset=1)
+    assert paged["count"] == 1
+    assert paged["total"] == 2
+    assert paged["limit"] == 1
+    assert paged["offset"] == 1
+    assert paged["items"][0]["run_id"] == run_first.name

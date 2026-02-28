@@ -58,6 +58,23 @@ class ProjectDreamAPI:
         run_dir = self.repository.find_latest_run()
         return {"run_id": run_dir.name, "run_dir": str(run_dir)}
 
+    def list_runs(
+        self,
+        *,
+        limit: int = 20,
+        offset: int = 0,
+        seed_id: str | None = None,
+        board_id: str | None = None,
+        status: str | None = None,
+    ) -> dict:
+        return self.repository.list_runs(
+            limit=limit,
+            offset=offset,
+            seed_id=seed_id,
+            board_id=board_id,
+            status=status,
+        )
+
     def get_report(self, run_id: str) -> dict:
         return self.repository.load_report(run_id)
 

@@ -1,7 +1,7 @@
-from pathlib import Path
 import json
 import sqlite3
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Protocol
 
 from project_dream.eval_suite import find_latest_run
@@ -22,6 +22,17 @@ class RunRepository(Protocol):
         ...
 
     def get_run(self, run_id: str) -> Path:
+        ...
+
+    def list_runs(
+        self,
+        *,
+        limit: int = 20,
+        offset: int = 0,
+        seed_id: str | None = None,
+        board_id: str | None = None,
+        status: str | None = None,
+    ) -> dict:
         ...
 
     def load_report(self, run_id: str) -> dict:
@@ -61,6 +72,113 @@ class FileRunRepository:
         if not run_dir.exists():
             raise FileNotFoundError(f"Run not found: {run_id}")
         return run_dir
+
+    def _validate_list_params(self, *, limit: int, offset: int) -> None:
+        if limit < 1:
+            raise ValueError(f"Invalid limit: {limit}")
+        if offset < 0:
+            raise ValueError(f"Invalid offset: {offset}")
+
+    def _list_run_directories(self) -> list[Path]:
+        if not self.runs_dir.exists():
+            return []
+
+        run_dirs = [path for path in self.runs_dir.glob("run-*") if path.is_dir()]
+        run_dirs.sort(key=lambda path: (path.stat().st_mtime, path.name), reverse=True)
+        return run_dirs
+
+    def _read_json_if_exists(self, path: Path) -> dict:
+        if not path.exists():
+            return {}
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def _extract_run_file_metadata(self, run_dir: Path) -> dict:
+        report = self._read_json_if_exists(run_dir / "report.json")
+        eval_payload = self._read_json_if_exists(run_dir / "eval.json")
+        runlog_path = run_dir / "runlog.jsonl"
+
+        board_id = ""
+        zone_id = ""
+        status = ""
+        termination_reason = ""
+        total_reports = 0
+
+        if runlog_path.exists():
+            for line in runlog_path.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                row_type = str(row.get("type", ""))
+
+                if row_type == "context":
+                    bundle = row.get("bundle", {})
+                    if isinstance(bundle, dict):
+                        if not board_id:
+                            board_id = str(bundle.get("board_id", ""))
+                        if not zone_id:
+                            zone_id = str(bundle.get("zone_id", ""))
+                elif row_type == "round":
+                    if not board_id:
+                        board_id = str(row.get("board_id", ""))
+                elif row_type == "end_condition":
+                    status = str(row.get("status", ""))
+                    termination_reason = str(row.get("termination_reason", ""))
+                elif row_type == "moderation_decision":
+                    if not status:
+                        status = str(row.get("status_after", ""))
+                    total_reports = max(total_reports, int(row.get("report_total", 0)))
+
+        created_at = datetime.fromtimestamp(run_dir.stat().st_mtime, tz=UTC).isoformat()
+        report_gate = report.get("report_gate", {}) if isinstance(report, dict) else {}
+        report_gate_pass = (
+            bool(report_gate.get("pass_fail"))
+            if isinstance(report_gate, dict) and "pass_fail" in report_gate
+            else None
+        )
+        eval_pass = bool(eval_payload.get("pass_fail")) if "pass_fail" in eval_payload else None
+
+        return {
+            "run_id": run_dir.name,
+            "run_dir": str(run_dir),
+            "created_at_utc": created_at,
+            "seed_id": str(report.get("seed_id", "")) if isinstance(report, dict) else "",
+            "board_id": board_id,
+            "zone_id": zone_id,
+            "status": status,
+            "termination_reason": termination_reason,
+            "total_reports": total_reports,
+            "report_gate_pass": report_gate_pass,
+            "eval_pass": eval_pass,
+        }
+
+    def list_runs(
+        self,
+        *,
+        limit: int = 20,
+        offset: int = 0,
+        seed_id: str | None = None,
+        board_id: str | None = None,
+        status: str | None = None,
+    ) -> dict:
+        self._validate_list_params(limit=limit, offset=offset)
+
+        rows = [self._extract_run_file_metadata(run_dir) for run_dir in self._list_run_directories()]
+        if seed_id:
+            rows = [row for row in rows if row.get("seed_id", "") == seed_id]
+        if board_id:
+            rows = [row for row in rows if row.get("board_id", "") == board_id]
+        if status:
+            rows = [row for row in rows if row.get("status", "") == status]
+
+        total = len(rows)
+        items = rows[offset : offset + limit]
+        return {
+            "count": len(items),
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "items": items,
+        }
 
     def load_report(self, run_id: str) -> dict:
         run_dir = self.get_run(run_id)
@@ -272,6 +390,82 @@ class SQLiteRunRepository:
         if not run_dir.exists():
             raise FileNotFoundError(f"Run not found: {run_id}")
         return run_dir
+
+    def list_runs(
+        self,
+        *,
+        limit: int = 20,
+        offset: int = 0,
+        seed_id: str | None = None,
+        board_id: str | None = None,
+        status: str | None = None,
+    ) -> dict:
+        if limit < 1:
+            raise ValueError(f"Invalid limit: {limit}")
+        if offset < 0:
+            raise ValueError(f"Invalid offset: {offset}")
+
+        clauses: list[str] = []
+        params: list[object] = []
+        if seed_id:
+            clauses.append("seed_id = ?")
+            params.append(seed_id)
+        if board_id:
+            clauses.append("board_id = ?")
+            params.append(board_id)
+        if status:
+            clauses.append("status = ?")
+            params.append(status)
+        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+
+        with self._connect() as conn:
+            total_row = conn.execute(
+                f"SELECT COUNT(*) AS total FROM runs {where_clause}",
+                params,
+            ).fetchone()
+            total = int(total_row["total"]) if total_row is not None else 0
+
+            rows = conn.execute(
+                f"""
+                SELECT run_id, run_dir, created_at_utc, seed_id, board_id, zone_id, status,
+                       termination_reason, total_reports, report_gate_pass, eval_pass
+                FROM runs
+                {where_clause}
+                ORDER BY created_at_utc DESC
+                LIMIT ? OFFSET ?
+                """,
+                [*params, limit, offset],
+            ).fetchall()
+
+        items: list[dict] = []
+        for row in rows:
+            report_gate_raw = row["report_gate_pass"]
+            eval_pass_raw = row["eval_pass"]
+            items.append(
+                {
+                    "run_id": str(row["run_id"]),
+                    "run_dir": str(row["run_dir"]),
+                    "created_at_utc": str(row["created_at_utc"]),
+                    "seed_id": str(row["seed_id"] or ""),
+                    "board_id": str(row["board_id"] or ""),
+                    "zone_id": str(row["zone_id"] or ""),
+                    "status": str(row["status"] or ""),
+                    "termination_reason": str(row["termination_reason"] or ""),
+                    "total_reports": int(row["total_reports"] or 0),
+                    "report_gate_pass": (
+                        bool(int(report_gate_raw)) if report_gate_raw is not None else None
+                    ),
+                    "eval_pass": bool(int(eval_pass_raw)) if eval_pass_raw is not None else None,
+                }
+            )
+
+        return {
+            "count": len(items),
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "items": items,
+        }
 
     def load_report(self, run_id: str) -> dict:
         run_dir = self.get_run(run_id)
