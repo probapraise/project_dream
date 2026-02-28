@@ -136,7 +136,26 @@ def _compare_regress_live_baseline(
     return failures
 
 
+def _vector_backend_default_from_env() -> str:
+    raw = os.environ.get("PROJECT_DREAM_VECTOR_BACKEND", "memory")
+    backend = str(raw).strip().lower()
+    if backend not in {"memory", "sqlite"}:
+        raise ValueError(f"Invalid PROJECT_DREAM_VECTOR_BACKEND: {raw}")
+    return backend
+
+
+def _vector_db_path_default_from_env() -> str | None:
+    raw = os.environ.get("PROJECT_DREAM_VECTOR_DB_PATH")
+    if raw is None:
+        return None
+    path = str(raw).strip()
+    return path or None
+
+
 def build_parser() -> argparse.ArgumentParser:
+    vector_backend_default = _vector_backend_default_from_env()
+    vector_db_path_default = _vector_db_path_default_from_env()
+
     parser = argparse.ArgumentParser(prog="project-dream")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -158,9 +177,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--vector-backend",
         required=False,
         choices=["memory", "sqlite"],
-        default="memory",
+        default=vector_backend_default,
     )
-    sim.add_argument("--vector-db-path", required=False, default=None)
+    sim.add_argument("--vector-db-path", required=False, default=vector_db_path_default)
 
     ingest = sub.add_parser("ingest")
     ingest.add_argument("--packs-dir", required=False, default="packs")
@@ -203,9 +222,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--vector-backend",
         required=False,
         choices=["memory", "sqlite"],
-        default="memory",
+        default=vector_backend_default,
     )
-    reg.add_argument("--vector-db-path", required=False, default=None)
+    reg.add_argument("--vector-db-path", required=False, default=vector_db_path_default)
 
     reg_live = sub.add_parser("regress-live")
     reg_live.add_argument("--seeds-dir", required=False, default="examples/seeds/regression")
@@ -239,9 +258,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--vector-backend",
         required=False,
         choices=["memory", "sqlite"],
-        default="memory",
+        default=vector_backend_default,
     )
-    reg_live.add_argument("--vector-db-path", required=False, default=None)
+    reg_live.add_argument("--vector-db-path", required=False, default=vector_db_path_default)
 
     srv = sub.add_parser("serve")
     srv.add_argument("--host", required=False, default="127.0.0.1")
@@ -255,9 +274,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--vector-backend",
         required=False,
         choices=["memory", "sqlite"],
-        default="memory",
+        default=vector_backend_default,
     )
-    srv.add_argument("--vector-db-path", required=False, default=None)
+    srv.add_argument("--vector-db-path", required=False, default=vector_db_path_default)
     return parser
 
 

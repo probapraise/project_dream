@@ -34,6 +34,12 @@ cp .env.example .env
 ```
 
 `.env`에서 `PROJECT_DREAM_HOST/PORT/RUNS_DIR/PACKS_DIR`를 조정하면 환경이 바뀌어도 같은 명령으로 서버 실행/검증이 가능합니다.
+벡터 인덱스 기본값도 `.env`로 고정할 수 있습니다:
+
+- `PROJECT_DREAM_VECTOR_BACKEND=memory|sqlite`
+- `PROJECT_DREAM_VECTOR_DB_PATH=<path>` (sqlite 선택 시 권장)
+
+CLI(`simulate/regress/regress-live/serve`)에서 벡터 옵션을 명시하지 않으면 위 환경변수 기본값을 사용합니다.
 
 ### Corpus Build (Ingest)
 

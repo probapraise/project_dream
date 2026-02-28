@@ -74,3 +74,44 @@ def test_cli_regress_returns_nonzero_when_gate_fails(tmp_path: Path):
         ]
     )
     assert rc != 0
+
+
+def test_cli_regress_uses_vector_backend_env_defaults(tmp_path: Path, monkeypatch):
+    seeds_dir = tmp_path / "seeds-env"
+    seeds_dir.mkdir(parents=True, exist_ok=True)
+    _write_seed(seeds_dir / "seed_001.json", "SEED-C-ENV-001", "B01", "A")
+
+    vector_db_path = tmp_path / "regress-env-vectors.sqlite3"
+    monkeypatch.setenv("PROJECT_DREAM_VECTOR_BACKEND", "sqlite")
+    monkeypatch.setenv("PROJECT_DREAM_VECTOR_DB_PATH", str(vector_db_path))
+
+    runs_dir = tmp_path / "runs-env"
+    rc = main(
+        [
+            "regress",
+            "--seeds-dir",
+            str(seeds_dir),
+            "--output-dir",
+            str(runs_dir),
+            "--max-seeds",
+            "1",
+            "--rounds",
+            "3",
+            "--min-community-coverage",
+            "1",
+            "--min-conflict-frame-runs",
+            "0",
+            "--min-moderation-hook-runs",
+            "0",
+            "--min-validation-warning-runs",
+            "0",
+        ]
+    )
+    assert rc == 0
+    assert vector_db_path.exists()
+
+    summary_files = list((runs_dir / "regressions").glob("regression-*.json"))
+    assert len(summary_files) == 1
+    payload = json.loads(summary_files[0].read_text(encoding="utf-8"))
+    assert payload["config"]["vector_backend"] == "sqlite"
+    assert payload["config"]["vector_db_path"] == str(vector_db_path)
