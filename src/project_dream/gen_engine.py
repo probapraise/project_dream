@@ -1,4 +1,4 @@
-from project_dream.llm_client import EchoLLMClient, LLMClient
+from project_dream.llm_client import LLMClient, build_default_llm_client
 from project_dream.models import SeedInput
 from project_dream.prompt_templates import render_prompt
 
@@ -42,5 +42,5 @@ def generate_comment(
     voice_hint = _render_voice_hint(voice_constraints)
     if voice_hint:
         prompt = f"{prompt} | {voice_hint}"
-    client = llm_client if llm_client is not None else EchoLLMClient()
+    client = llm_client if llm_client is not None else build_default_llm_client()
     return client.generate(prompt, task="comment_generation")

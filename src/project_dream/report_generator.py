@@ -1,6 +1,6 @@
 from collections import Counter
 
-from project_dream.llm_client import EchoLLMClient, LLMClient
+from project_dream.llm_client import LLMClient, build_default_llm_client
 from project_dream.models import ReportConflictMap, ReportRiskCheck, ReportV1
 from project_dream.prompt_templates import render_prompt
 
@@ -166,7 +166,7 @@ def build_report_v1(
     llm_client: LLMClient | None = None,
     template_set: str = "v1",
 ) -> dict:
-    client = llm_client if llm_client is not None else EchoLLMClient()
+    client = llm_client if llm_client is not None else build_default_llm_client()
     round_count = len(sim_result.get("rounds", []))
     summary_prompt = render_prompt(
         "report_summary",

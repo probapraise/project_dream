@@ -31,6 +31,22 @@ cp .env.example .env
 
 `.env`에서 `PROJECT_DREAM_HOST/PORT/RUNS_DIR/PACKS_DIR`를 조정하면 환경이 바뀌어도 같은 명령으로 서버 실행/검증이 가능합니다.
 
+### Run Tests With Gemini 3.1 Flash
+
+`.env`에서 아래를 설정하면 기본 LLM client가 Google AI Studio를 사용합니다.
+
+```bash
+PROJECT_DREAM_LLM_PROVIDER=google
+PROJECT_DREAM_LLM_MODEL=gemini-3.1-flash
+GOOGLE_API_KEY=<your-key>
+GEMINI_API_KEY=$GOOGLE_API_KEY
+PROJECT_DREAM_LLM_RESPONSE_MODE=prompt_passthrough
+```
+
+`prompt_passthrough`는 프로세스당 1회 Gemini 연결을 확인하고, 이후에는 응답 대신 prompt를 사용해 테스트를 빠르고 결정적으로 유지합니다.
+실제 모델 출력을 그대로 쓰려면 `PROJECT_DREAM_LLM_RESPONSE_MODE=model_output`로 바꾸면 됩니다.
+`gemini-3.1-flash`가 계정에서 아직 미노출인 경우 자동으로 `gemini-3-flash-preview` 등으로 폴백합니다.
+
 ### Server Control
 
 ```bash
