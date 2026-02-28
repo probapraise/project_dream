@@ -49,6 +49,40 @@ def _fake_sim_result() -> dict:
     }
 
 
+def _fake_langgraph_graph_module():
+    class _CompiledGraph:
+        def __init__(self, nodes: dict[str, object]):
+            self._nodes = nodes
+
+        def invoke(self, state: dict) -> dict:
+            current = dict(state)
+            for node_id in ("thread_candidate", "round_loop", "moderation", "end_condition"):
+                update = self._nodes[node_id](current)
+                if isinstance(update, dict):
+                    current.update(update)
+            return current
+
+    class _StateGraph:
+        def __init__(self, _state_type):
+            self._nodes: dict[str, object] = {}
+
+        def add_node(self, node_id: str, node_fn):
+            self._nodes[node_id] = node_fn
+
+        def add_edge(self, _src, _dst):
+            return None
+
+        def compile(self):
+            return _CompiledGraph(self._nodes)
+
+    class _FakeGraphModule:
+        StateGraph = _StateGraph
+        START = "__start__"
+        END = "__end__"
+
+    return _FakeGraphModule()
+
+
 def test_runtime_manual_backend_delegates(monkeypatch: pytest.MonkeyPatch):
     import project_dream.orchestrator_runtime as runtime
 
@@ -79,6 +113,7 @@ def test_runtime_manual_backend_delegates(monkeypatch: pytest.MonkeyPatch):
     assert payload["graph_node_trace"]["nodes"][1]["event_count"] == 2
     assert payload["graph_node_trace"]["nodes"][2]["event_count"] == 2
     assert payload["graph_node_trace"]["nodes"][3]["event_count"] == 1
+    assert payload["graph_node_trace"]["execution_mode"] == "manual"
 
 
 def test_runtime_rejects_unknown_backend():
@@ -114,12 +149,15 @@ def test_runtime_langgraph_backend_delegates_when_available(monkeypatch: pytest.
     import project_dream.orchestrator_runtime as runtime
 
     captured: dict = {}
+    imported_modules: list[str] = []
 
     def fake_import(name: str):
-        class _FakeModule:
-            pass
-
-        return _FakeModule()
+        imported_modules.append(name)
+        if name == "langgraph":
+            return object()
+        if name == "langgraph.graph":
+            return _fake_langgraph_graph_module()
+        raise ImportError(name)
 
     def fake_run_simulation(*, seed, rounds, corpus, max_retries=2, packs=None):
         captured["seed_id"] = seed.seed_id
@@ -138,16 +176,20 @@ def test_runtime_langgraph_backend_delegates_when_available(monkeypatch: pytest.
     assert payload["rounds"]
     assert captured["seed_id"] == "SEED-ORCH-001"
     assert payload["graph_node_trace"]["backend"] == "langgraph"
+    assert payload["graph_node_trace"]["execution_mode"] == "stategraph"
+    assert "langgraph" in imported_modules
+    assert "langgraph.graph" in imported_modules
 
 
 def test_runtime_manual_and_langgraph_are_equivalent_except_backend(monkeypatch: pytest.MonkeyPatch):
     import project_dream.orchestrator_runtime as runtime
 
     def fake_import(name: str):
-        class _FakeModule:
-            pass
-
-        return _FakeModule()
+        if name == "langgraph":
+            return object()
+        if name == "langgraph.graph":
+            return _fake_langgraph_graph_module()
+        raise ImportError(name)
 
     def fake_run_simulation(*, seed, rounds, corpus, max_retries=2, packs=None):
         return _fake_sim_result()
@@ -171,3 +213,5 @@ def test_runtime_manual_and_langgraph_are_equivalent_except_backend(monkeypatch:
     assert [node["event_count"] for node in manual_nodes] == [node["event_count"] for node in langgraph_nodes]
     assert manual["graph_node_trace"]["backend"] == "manual"
     assert langgraph["graph_node_trace"]["backend"] == "langgraph"
+    assert manual["graph_node_trace"]["execution_mode"] == "manual"
+    assert langgraph["graph_node_trace"]["execution_mode"] == "stategraph"
