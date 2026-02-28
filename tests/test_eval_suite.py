@@ -95,6 +95,7 @@ def test_evaluate_run_passes_on_valid_structure(tmp_path: Path):
     assert result["pass_fail"] is True
     assert result["seed_id"] == "SEED-001"
     assert result["checks"]
+    assert result["metrics"]["stage_trace_coverage_rate"] == 1.0
 
 
 def test_evaluate_run_fails_on_missing_required_sections(tmp_path: Path):

@@ -83,6 +83,7 @@ def test_eval_quality_v1_metrics_are_present_and_bounded(tmp_path: Path):
     assert 0.0 <= result["metrics"]["moderation_intervention_rate"] <= 1.0
     assert 0.0 <= result["metrics"]["gate_rewrite_rate"] <= 1.0
     assert 0.0 <= result["metrics"]["community_dispersion"] <= 1.0
+    assert 0.0 <= result["metrics"]["stage_trace_coverage_rate"] <= 1.0
 
 
 def test_eval_quality_v2_metrics_include_v1_and_new_metrics(tmp_path: Path):
@@ -95,6 +96,7 @@ def test_eval_quality_v2_metrics_include_v1_and_new_metrics(tmp_path: Path):
     assert "moderation_intervention_rate" in result["metrics"]
     assert "gate_rewrite_rate" in result["metrics"]
     assert "community_dispersion" in result["metrics"]
+    assert "stage_trace_coverage_rate" in result["metrics"]
     assert "lore_pass_rate" in result["metrics"]
     assert "moderation_escalation_depth" in result["metrics"]
     assert "dialogue_speaker_diversity" in result["metrics"]
