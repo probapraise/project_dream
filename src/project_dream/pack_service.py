@@ -2,6 +2,16 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from project_dream.pack_schemas import (
+    BoardPackPayload,
+    CommunityPackPayload,
+    EntityPackPayload,
+    PersonaPackPayload,
+    RulePackPayload,
+    TemplatePackPayload,
+    validate_pack_payload,
+)
+
 
 @dataclass
 class LoadedPacks:
@@ -187,12 +197,36 @@ def _validate_minimum_requirements(packs: LoadedPacks) -> None:
 
 
 def load_packs(base_dir: Path, enforce_phase1_minimums: bool = False) -> LoadedPacks:
-    board_pack = _read_pack(base_dir / "board_pack.json", "boards")
-    community_pack = _read_pack(base_dir / "community_pack.json", "communities")
-    rule_pack = _read_pack(base_dir / "rule_pack.json", "rules")
-    entity_pack = _read_pack(base_dir / "entity_pack.json", "orgs")
-    persona_pack = _read_pack(base_dir / "persona_pack.json", "personas")
-    template_pack = _read_pack(base_dir / "template_pack.json", "thread_templates")
+    board_pack = validate_pack_payload(
+        _read_pack(base_dir / "board_pack.json", "boards"),
+        BoardPackPayload,
+        "board_pack.json",
+    )
+    community_pack = validate_pack_payload(
+        _read_pack(base_dir / "community_pack.json", "communities"),
+        CommunityPackPayload,
+        "community_pack.json",
+    )
+    rule_pack = validate_pack_payload(
+        _read_pack(base_dir / "rule_pack.json", "rules"),
+        RulePackPayload,
+        "rule_pack.json",
+    )
+    entity_pack = validate_pack_payload(
+        _read_pack(base_dir / "entity_pack.json", "orgs"),
+        EntityPackPayload,
+        "entity_pack.json",
+    )
+    persona_pack = validate_pack_payload(
+        _read_pack(base_dir / "persona_pack.json", "personas"),
+        PersonaPackPayload,
+        "persona_pack.json",
+    )
+    template_pack = validate_pack_payload(
+        _read_pack(base_dir / "template_pack.json", "thread_templates"),
+        TemplatePackPayload,
+        "template_pack.json",
+    )
 
     boards = _index_by_id(board_pack["boards"], "board")
     communities = _index_by_id(community_pack["communities"], "community")
