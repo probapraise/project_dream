@@ -10,6 +10,7 @@ pytest -q
 python -m project_dream.cli simulate --seed examples/seeds/seed_001.json --output-dir runs --rounds 3
 python -m project_dream.cli evaluate --runs-dir runs --metric-set v2
 python -m project_dream.cli regress --seeds-dir examples/seeds/regression --output-dir runs --max-seeds 10
+python -m project_dream.cli regress-live
 python -m project_dream.cli serve --api-token local-dev-token
 # or: export PROJECT_DREAM_API_TOKEN=local-dev-token && python -m project_dream.cli serve
 ```
@@ -46,6 +47,24 @@ PROJECT_DREAM_LLM_RESPONSE_MODE=prompt_passthrough
 `prompt_passthrough`는 프로세스당 1회 Gemini 연결을 확인하고, 이후에는 응답 대신 prompt를 사용해 테스트를 빠르고 결정적으로 유지합니다.
 실제 모델 출력을 그대로 쓰려면 `PROJECT_DREAM_LLM_RESPONSE_MODE=model_output`로 바꾸면 됩니다.
 `gemini-3.1-flash`가 계정에서 아직 미노출인 경우 자동으로 `gemini-3-flash-preview` 등으로 폴백합니다.
+
+### Live LLM Regression Smoke
+
+실제 모델 출력 품질을 빠르게 확인하려면 아래 명령을 사용합니다.
+
+```bash
+python -m project_dream.cli regress-live
+# 또는
+./scripts/regress_live.sh
+```
+
+`regress-live`는 실행 중에만 LLM 설정을 아래처럼 강제합니다.
+
+- `PROJECT_DREAM_LLM_PROVIDER=google`
+- `PROJECT_DREAM_LLM_RESPONSE_MODE=model_output`
+- `PROJECT_DREAM_LLM_MODEL=gemini-3.1-flash` (기본값, `--llm-model`로 변경 가능)
+
+기본은 `max-seeds=2`, `metric-set=v2`의 소규모 스모크 실행이며, 인자는 `regress`와 동일하게 대부분 커스터마이즈할 수 있습니다.
 
 ### Server Control
 
