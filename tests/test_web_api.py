@@ -1,6 +1,8 @@
 from pathlib import Path
 
-from project_dream.infra.store import FileRunRepository
+import pytest
+
+from project_dream.infra.store import FileRunRepository, SQLiteRunRepository
 from project_dream.infra.web_api import ProjectDreamAPI
 
 
@@ -209,3 +211,25 @@ def test_web_api_kb_query_uses_ingested_corpus(tmp_path: Path):
         top_k=3,
     )
     assert any("API-INGEST-CTX-B07" in text for text in ctx["corpus"])
+
+
+def test_web_api_for_local_filesystem_supports_sqlite_backend(tmp_path: Path):
+    db_path = tmp_path / "custom-runs.sqlite3"
+    api = ProjectDreamAPI.for_local_filesystem(
+        runs_dir=tmp_path / "runs",
+        packs_dir=Path("packs"),
+        repository_backend="sqlite",
+        sqlite_db_path=db_path,
+    )
+
+    assert isinstance(api.repository, SQLiteRunRepository)
+    assert api.repository.db_path == db_path
+
+
+def test_web_api_for_local_filesystem_rejects_unknown_backend(tmp_path: Path):
+    with pytest.raises(ValueError):
+        ProjectDreamAPI.for_local_filesystem(
+            runs_dir=tmp_path / "runs",
+            packs_dir=Path("packs"),
+            repository_backend="unknown",
+        )

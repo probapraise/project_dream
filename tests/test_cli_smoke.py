@@ -9,6 +9,8 @@ def test_cli_supports_simulate_command():
     assert args.command == "simulate"
     assert args.seed == "seed.json"
     assert args.corpus_dir == "corpus"
+    assert args.repo_backend == "file"
+    assert args.sqlite_db_path is None
 
 
 def test_cli_supports_ingest_command():
@@ -34,6 +36,58 @@ def test_cli_supports_eval_export_command():
     assert args.run_id is None
     assert args.output_dir is None
     assert args.max_contexts == 5
+    assert args.repo_backend == "file"
+    assert args.sqlite_db_path is None
+
+
+def test_cli_supports_repository_backend_flags():
+    parser = build_parser()
+
+    sim_args = parser.parse_args(
+        [
+            "simulate",
+            "--seed",
+            "seed.json",
+            "--repo-backend",
+            "sqlite",
+            "--sqlite-db-path",
+            "runs/custom.sqlite3",
+        ]
+    )
+    assert sim_args.repo_backend == "sqlite"
+    assert sim_args.sqlite_db_path == "runs/custom.sqlite3"
+
+    eval_args = parser.parse_args(
+        [
+            "evaluate",
+            "--repo-backend",
+            "sqlite",
+            "--sqlite-db-path",
+            "runs/custom.sqlite3",
+        ]
+    )
+    assert eval_args.repo_backend == "sqlite"
+    assert eval_args.sqlite_db_path == "runs/custom.sqlite3"
+
+    serve_args = parser.parse_args(
+        [
+            "serve",
+            "--api-token",
+            "token",
+            "--repo-backend",
+            "sqlite",
+            "--sqlite-db-path",
+            "runs/custom.sqlite3",
+        ]
+    )
+    assert serve_args.repo_backend == "sqlite"
+    assert serve_args.sqlite_db_path == "runs/custom.sqlite3"
+
+
+def test_cli_rejects_unknown_repository_backend():
+    parser = build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["simulate", "--seed", "seed.json", "--repo-backend", "unknown"])
 
 
 def test_cli_supports_regress_live_command_with_defaults():

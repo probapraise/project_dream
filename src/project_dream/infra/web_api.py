@@ -2,7 +2,7 @@ from pathlib import Path
 
 from project_dream.app_service import evaluate_and_persist, regress_and_persist, simulate_and_persist
 from project_dream.kb_index import build_index, get_pack_item as kb_get_pack_item, retrieve_context, search
-from project_dream.infra.store import FileRunRepository, RunRepository
+from project_dream.infra.store import FileRunRepository, RunRepository, SQLiteRunRepository
 from project_dream.models import SeedInput
 from project_dream.pack_service import load_packs
 
@@ -20,8 +20,17 @@ class ProjectDreamAPI:
         runs_dir: Path = Path("runs"),
         packs_dir: Path = Path("packs"),
         corpus_dir: Path = Path("corpus"),
+        repository_backend: str = "file",
+        sqlite_db_path: Path | None = None,
     ) -> "ProjectDreamAPI":
-        return cls(repository=FileRunRepository(runs_dir), packs_dir=packs_dir, corpus_dir=corpus_dir)
+        backend = repository_backend.strip().lower()
+        if backend == "sqlite":
+            repository: RunRepository = SQLiteRunRepository(runs_dir, db_path=sqlite_db_path)
+        elif backend == "file":
+            repository = FileRunRepository(runs_dir)
+        else:
+            raise ValueError(f"Unknown repository backend: {repository_backend}")
+        return cls(repository=repository, packs_dir=packs_dir, corpus_dir=corpus_dir)
 
     def health(self) -> dict:
         return {"status": "ok", "service": "project-dream"}

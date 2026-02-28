@@ -10,7 +10,7 @@ from project_dream.app_service import evaluate_and_persist, simulate_and_persist
 from project_dream.data_ingest import build_corpus_from_packs
 from project_dream.eval_export import export_external_eval_bundle
 from project_dream.infra.http_server import serve
-from project_dream.infra.store import FileRunRepository
+from project_dream.infra.store import FileRunRepository, RunRepository, SQLiteRunRepository
 from project_dream.infra.web_api import ProjectDreamAPI
 from project_dream.models import SeedInput
 from project_dream.regression_runner import run_regression_batch
@@ -67,6 +67,21 @@ def _load_json_or_none(path: Path) -> dict | None:
     if not path.exists():
         return None
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _build_repository(
+    *,
+    runs_dir: Path,
+    repository_backend: str,
+    sqlite_db_path: str | None,
+) -> RunRepository:
+    backend = repository_backend.strip().lower()
+    if backend == "file":
+        return FileRunRepository(runs_dir)
+    if backend == "sqlite":
+        db_path = Path(sqlite_db_path) if sqlite_db_path else None
+        return SQLiteRunRepository(runs_dir, db_path=db_path)
+    raise ValueError(f"Unknown repository backend: {repository_backend}")
 
 
 def _write_regress_live_baseline(
@@ -131,6 +146,8 @@ def build_parser() -> argparse.ArgumentParser:
     sim.add_argument("--corpus-dir", required=False, default="corpus")
     sim.add_argument("--output-dir", required=False, default="runs")
     sim.add_argument("--rounds", type=int, default=3)
+    sim.add_argument("--repo-backend", required=False, choices=["file", "sqlite"], default="file")
+    sim.add_argument("--sqlite-db-path", required=False, default=None)
 
     ingest = sub.add_parser("ingest")
     ingest.add_argument("--packs-dir", required=False, default="packs")
@@ -140,12 +157,16 @@ def build_parser() -> argparse.ArgumentParser:
     eva.add_argument("--runs-dir", required=False, default="runs")
     eva.add_argument("--run-id", required=False, default=None)
     eva.add_argument("--metric-set", required=False, default="v1")
+    eva.add_argument("--repo-backend", required=False, choices=["file", "sqlite"], default="file")
+    eva.add_argument("--sqlite-db-path", required=False, default=None)
 
     eva_export = sub.add_parser("eval-export")
     eva_export.add_argument("--runs-dir", required=False, default="runs")
     eva_export.add_argument("--run-id", required=False, default=None)
     eva_export.add_argument("--output-dir", required=False, default=None)
     eva_export.add_argument("--max-contexts", type=int, default=5)
+    eva_export.add_argument("--repo-backend", required=False, choices=["file", "sqlite"], default="file")
+    eva_export.add_argument("--sqlite-db-path", required=False, default=None)
 
     reg = sub.add_parser("regress")
     reg.add_argument("--seeds-dir", required=False, default="examples/seeds/regression")
@@ -189,6 +210,8 @@ def build_parser() -> argparse.ArgumentParser:
     srv.add_argument("--runs-dir", required=False, default="runs")
     srv.add_argument("--packs-dir", required=False, default="packs")
     srv.add_argument("--api-token", required=False, default=None)
+    srv.add_argument("--repo-backend", required=False, choices=["file", "sqlite"], default="file")
+    srv.add_argument("--sqlite-db-path", required=False, default=None)
     return parser
 
 
@@ -199,7 +222,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "simulate":
         seed_path = Path(args.seed)
         seed = SeedInput.model_validate_json(seed_path.read_text(encoding="utf-8"))
-        repository = FileRunRepository(Path(args.output_dir))
+        repository = _build_repository(
+            runs_dir=Path(args.output_dir),
+            repository_backend=args.repo_backend,
+            sqlite_db_path=args.sqlite_db_path,
+        )
         simulate_and_persist(
             seed,
             rounds=args.rounds,
@@ -214,14 +241,22 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(summary, ensure_ascii=False))
     elif args.command == "evaluate":
-        repository = FileRunRepository(Path(args.runs_dir))
+        repository = _build_repository(
+            runs_dir=Path(args.runs_dir),
+            repository_backend=args.repo_backend,
+            sqlite_db_path=args.sqlite_db_path,
+        )
         evaluate_and_persist(
             repository=repository,
             run_id=args.run_id,
             metric_set=args.metric_set,
         )
     elif args.command == "eval-export":
-        repository = FileRunRepository(Path(args.runs_dir))
+        repository = _build_repository(
+            runs_dir=Path(args.runs_dir),
+            repository_backend=args.repo_backend,
+            sqlite_db_path=args.sqlite_db_path,
+        )
         run_dir = repository.get_run(args.run_id) if args.run_id else repository.find_latest_run()
         output_dir = Path(args.output_dir) if args.output_dir else None
         manifest = export_external_eval_bundle(
@@ -314,6 +349,8 @@ def main(argv: list[str] | None = None) -> int:
         api = ProjectDreamAPI.for_local_filesystem(
             runs_dir=Path(args.runs_dir),
             packs_dir=Path(args.packs_dir),
+            repository_backend=args.repo_backend,
+            sqlite_db_path=Path(args.sqlite_db_path) if args.sqlite_db_path else None,
         )
         try:
             serve(
