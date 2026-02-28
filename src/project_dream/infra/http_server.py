@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from project_dream.infra.web_api import ProjectDreamAPI
+from project_dream.orchestrator_runtime import StageNodeExecutionError
 
 
 def _json_bytes(payload: dict) -> bytes:
@@ -252,6 +253,17 @@ def create_server(
                 self._send(400, {"error": "bad_request", "message": str(exc)})
             except FileNotFoundError as exc:
                 self._send(404, {"error": "not_found", "message": str(exc)})
+            except StageNodeExecutionError as exc:
+                self._send(
+                    500,
+                    {
+                        "error": "stage_execution_failed",
+                        "error_code": "ORCH_STAGE_FAILED",
+                        "stage_node": exc.node_id,
+                        "attempts": exc.attempts,
+                        "message": str(exc),
+                    },
+                )
             except Exception as exc:  # pragma: no cover - defensive
                 self._send(500, {"error": "internal_error", "message": str(exc)})
             finally:

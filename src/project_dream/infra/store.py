@@ -96,6 +96,24 @@ def _extract_stage_trace_from_runlog_rows(rows: list[dict]) -> dict:
     }
 
 
+def _build_runlog_summary(rows: list[dict]) -> dict:
+    row_counts: dict[str, int] = {}
+    for row in rows:
+        row_type = str(row.get("type", "")).strip() if isinstance(row, dict) else ""
+        key = row_type or "unknown"
+        row_counts[key] = row_counts.get(key, 0) + 1
+
+    stage_trace = _extract_stage_trace_from_runlog_rows(rows)
+    return {
+        "row_counts": row_counts,
+        "stage": {
+            "retry_count": int(stage_trace["stage_retry_count"]),
+            "failure_count": int(stage_trace["stage_failure_count"]),
+            "max_attempts": int(stage_trace["max_stage_attempts"]),
+        },
+    }
+
+
 class RunRepository(Protocol):
     runs_dir: Path
 
@@ -310,7 +328,7 @@ class FileRunRepository:
             if not line.strip():
                 continue
             rows.append(json.loads(line))
-        return {"run_id": run_id, "rows": rows}
+        return {"run_id": run_id, "rows": rows, "summary": _build_runlog_summary(rows)}
 
     def persist_regression_summary(self, summary: dict) -> None:
         # File backend keeps regression metadata as files only.
@@ -670,7 +688,7 @@ class SQLiteRunRepository:
             if not line.strip():
                 continue
             rows.append(json.loads(line))
-        return {"run_id": run_id, "rows": rows}
+        return {"run_id": run_id, "rows": rows, "summary": _build_runlog_summary(rows)}
 
     def _sync_regression_indexes_from_files(self) -> None:
         regressions_dir = self.runs_dir / "regressions"
