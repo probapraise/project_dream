@@ -169,6 +169,32 @@ def test_cli_supports_regress_live_command_with_defaults():
     assert args.vector_db_path is None
 
 
+def test_cli_vector_defaults_can_be_loaded_from_environment(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("PROJECT_DREAM_VECTOR_BACKEND", "sqlite")
+    monkeypatch.setenv("PROJECT_DREAM_VECTOR_DB_PATH", "runs/env-vectors.sqlite3")
+
+    parser = build_parser()
+    sim_args = parser.parse_args(["simulate", "--seed", "seed.json"])
+    regress_args = parser.parse_args(["regress"])
+    regress_live_args = parser.parse_args(["regress-live"])
+    serve_args = parser.parse_args(["serve", "--api-token", "token"])
+
+    assert sim_args.vector_backend == "sqlite"
+    assert sim_args.vector_db_path == "runs/env-vectors.sqlite3"
+    assert regress_args.vector_backend == "sqlite"
+    assert regress_args.vector_db_path == "runs/env-vectors.sqlite3"
+    assert regress_live_args.vector_backend == "sqlite"
+    assert regress_live_args.vector_db_path == "runs/env-vectors.sqlite3"
+    assert serve_args.vector_backend == "sqlite"
+    assert serve_args.vector_db_path == "runs/env-vectors.sqlite3"
+
+
+def test_cli_rejects_unknown_vector_backend_from_environment(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("PROJECT_DREAM_VECTOR_BACKEND", "unknown")
+    with pytest.raises(ValueError):
+        build_parser()
+
+
 def test_cli_serve_requires_api_token_when_not_set(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("PROJECT_DREAM_API_TOKEN", raising=False)
 

@@ -52,3 +52,37 @@ def test_cli_simulate_writes_run_outputs(tmp_path: Path):
     report_md = report_md_files[0].read_text(encoding="utf-8")
     assert "## Conflict Map" in report_md
     assert "## Risk Checks" in report_md
+
+
+def test_cli_simulate_uses_vector_backend_env_defaults(tmp_path: Path, monkeypatch):
+    seed_file = tmp_path / "seed.json"
+    seed_file.write_text(
+        json.dumps(
+            {
+                "seed_id": "SEED-ENV-001",
+                "title": "환경 기본값 테스트",
+                "summary": "벡터 백엔드 env 기본값 테스트",
+                "board_id": "B07",
+                "zone_id": "D",
+            }
+        ),
+        encoding="utf-8",
+    )
+    vector_db_path = tmp_path / "env-vectors.sqlite3"
+
+    monkeypatch.setenv("PROJECT_DREAM_VECTOR_BACKEND", "sqlite")
+    monkeypatch.setenv("PROJECT_DREAM_VECTOR_DB_PATH", str(vector_db_path))
+
+    rc = main(
+        [
+            "simulate",
+            "--seed",
+            str(seed_file),
+            "--output-dir",
+            str(tmp_path / "runs"),
+            "--rounds",
+            "3",
+        ]
+    )
+    assert rc == 0
+    assert vector_db_path.exists()
