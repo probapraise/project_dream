@@ -5,6 +5,10 @@ from project_dream.sim_orchestrator import (
     SIMULATION_STAGE_NODE_ORDER,
     assemble_sim_result_from_stage_payloads,
     extract_stage_payloads,
+    run_stage_node_end_condition,
+    run_stage_node_moderation,
+    run_stage_node_round_loop,
+    run_stage_node_thread_candidate,
     run_simulation,
 )
 
@@ -19,19 +23,19 @@ def _coerce_stage_payload(payload: dict | None) -> dict:
 
 
 def _run_stage_node_thread_candidate(stage_payload: dict) -> dict:
-    return _coerce_stage_payload(stage_payload)
+    return _coerce_stage_payload(run_stage_node_thread_candidate(stage_payload))
 
 
 def _run_stage_node_round_loop(stage_payload: dict) -> dict:
-    return _coerce_stage_payload(stage_payload)
+    return _coerce_stage_payload(run_stage_node_round_loop(stage_payload))
 
 
 def _run_stage_node_moderation(stage_payload: dict) -> dict:
-    return _coerce_stage_payload(stage_payload)
+    return _coerce_stage_payload(run_stage_node_moderation(stage_payload))
 
 
 def _run_stage_node_end_condition(stage_payload: dict) -> dict:
-    return _coerce_stage_payload(stage_payload)
+    return _coerce_stage_payload(run_stage_node_end_condition(stage_payload))
 
 
 def _resolve_stage_node_handler(node_id: str) -> Callable[[dict], dict]:
@@ -45,6 +49,48 @@ def _resolve_stage_node_handler(node_id: str) -> Callable[[dict], dict]:
         allowed = ", ".join(sorted(handlers))
         raise RuntimeError(f"Unknown stage node id: {node_id} (allowed: {allowed})")
     return handlers[node_id]
+
+
+def _run_stage_node_with_retry(
+    *,
+    node_id: str,
+    stage_payload: dict,
+    max_stage_retries: int,
+    checkpoint_log: list[dict],
+) -> tuple[dict, int]:
+    stage_node_handler = _resolve_stage_node_handler(node_id)
+    retry_budget = max(0, int(max_stage_retries))
+    max_attempts = retry_budget + 1
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            resolved_payload = _coerce_stage_payload(stage_node_handler(_coerce_stage_payload(stage_payload)))
+        except Exception as exc:
+            is_last_attempt = attempt >= max_attempts
+            checkpoint_log.append(
+                {
+                    "node_id": node_id,
+                    "attempt": attempt,
+                    "outcome": "failed" if is_last_attempt else "retry",
+                    "error": str(exc),
+                }
+            )
+            if is_last_attempt:
+                raise RuntimeError(
+                    f"Stage node '{node_id}' failed after {attempt} attempt(s): {exc}"
+                ) from exc
+            continue
+
+        checkpoint_log.append(
+            {
+                "node_id": node_id,
+                "attempt": attempt,
+                "outcome": "success",
+            }
+        )
+        return resolved_payload, attempt
+
+    raise RuntimeError(f"Stage node '{node_id}' failed before execution.")
 
 
 def _normalize_backend(backend: str) -> str:
@@ -82,36 +128,58 @@ def _load_langgraph_primitives() -> tuple[type, object, object]:
     return graph_module.StateGraph, graph_module.START, graph_module.END
 
 
-def _run_manual_stage_pipeline(stage_payloads: dict[str, dict]) -> tuple[list[str], dict[str, dict]]:
+def _run_manual_stage_pipeline(
+    stage_payloads: dict[str, dict],
+    *,
+    max_stage_retries: int = 0,
+) -> tuple[list[str], dict[str, dict], dict[str, int], list[dict]]:
     executed_nodes: list[str] = []
     resolved_payloads: dict[str, dict] = {}
+    node_attempts: dict[str, int] = {}
+    checkpoint_log: list[dict] = []
     for node_id in SIMULATION_STAGE_NODE_ORDER:
         stage_payload = _coerce_stage_payload(stage_payloads.get(node_id))
-        stage_node_handler = _resolve_stage_node_handler(node_id)
-        resolved_payloads[node_id] = _coerce_stage_payload(stage_node_handler(stage_payload))
+        resolved_payload, attempt_count = _run_stage_node_with_retry(
+            node_id=node_id,
+            stage_payload=stage_payload,
+            max_stage_retries=max_stage_retries,
+            checkpoint_log=checkpoint_log,
+        )
+        resolved_payloads[node_id] = resolved_payload
+        node_attempts[node_id] = attempt_count
         executed_nodes.append(node_id)
-    return executed_nodes, resolved_payloads
+    return executed_nodes, resolved_payloads, node_attempts, checkpoint_log
 
 
-def _run_langgraph_stage_pipeline(stage_payloads: dict[str, dict]) -> tuple[list[str], dict[str, dict]]:
+def _run_langgraph_stage_pipeline(
+    stage_payloads: dict[str, dict],
+    *,
+    max_stage_retries: int = 0,
+) -> tuple[list[str], dict[str, dict], dict[str, int], list[dict]]:
     StateGraph, START, END = _load_langgraph_primitives()
 
     graph = StateGraph(dict)
+    node_attempts: dict[str, int] = {}
+    checkpoint_log: list[dict] = []
 
     for node_id in SIMULATION_STAGE_NODE_ORDER:
         stage_payload = _coerce_stage_payload(stage_payloads.get(node_id))
-        stage_node_handler = _resolve_stage_node_handler(node_id)
 
         def _node(
             state: dict,
             *,
             _node_id: str = node_id,
             _stage_payload: dict = stage_payload,
-            _stage_node_handler: Callable[[dict], dict] = stage_node_handler,
         ) -> dict:
             executed = list(state.get("executed_nodes", []))
             executed.append(_node_id)
-            resolved_payload = _coerce_stage_payload(_stage_node_handler(_stage_payload))
+            resolved_payload, attempt_count = _run_stage_node_with_retry(
+                node_id=_node_id,
+                stage_payload=_stage_payload,
+                max_stage_retries=max_stage_retries,
+                checkpoint_log=checkpoint_log,
+            )
+            node_attempts[_node_id] = attempt_count
             return {
                 "executed_nodes": executed,
                 _node_id: resolved_payload,
@@ -131,7 +199,7 @@ def _run_langgraph_stage_pipeline(stage_payloads: dict[str, dict]) -> tuple[list
     for node_id in SIMULATION_STAGE_NODE_ORDER:
         node_payload = final_state.get(node_id, stage_payloads.get(node_id, {}))
         resolved_payloads[node_id] = _coerce_stage_payload(node_payload)
-    return executed_nodes, resolved_payloads
+    return executed_nodes, resolved_payloads, node_attempts, checkpoint_log
 
 
 def _graph_node_trace_template(
@@ -140,6 +208,8 @@ def _graph_node_trace_template(
     backend: str,
     execution_mode: str,
     executed_nodes: list[str] | None = None,
+    node_attempts: dict[str, int] | None = None,
+    stage_checkpoints: list[dict] | None = None,
 ) -> dict:
     thread_candidate_count = len(sim_result.get("thread_candidates", []))
     round_loop_count = len(sim_result.get("round_summaries", []))
@@ -154,6 +224,8 @@ def _graph_node_trace_template(
         "execution_mode": execution_mode,
         "node_order": list(SIMULATION_STAGE_NODE_ORDER),
         "executed_nodes": list(executed_nodes or []),
+        "node_attempts": dict(node_attempts or {}),
+        "stage_checkpoints": [dict(entry) for entry in (stage_checkpoints or [])],
         "nodes": [
             {
                 "node_id": "thread_candidate",
@@ -185,10 +257,12 @@ def run_simulation_with_backend(
     rounds: int,
     corpus: list[str],
     max_retries: int = 2,
+    max_stage_retries: int = 0,
     packs=None,
     backend: str = "manual",
 ) -> dict:
     selected = _normalize_backend(backend)
+    stage_retry_budget = max(0, int(max_stage_retries))
     raw_result = run_simulation(
         seed=seed,
         rounds=rounds,
@@ -200,10 +274,16 @@ def run_simulation_with_backend(
 
     if selected == "langgraph":
         _ensure_langgraph_available()
-        executed_nodes, resolved_payloads = _run_langgraph_stage_pipeline(stage_payloads)
+        executed_nodes, resolved_payloads, node_attempts, stage_checkpoints = _run_langgraph_stage_pipeline(
+            stage_payloads,
+            max_stage_retries=stage_retry_budget,
+        )
         execution_mode = "stategraph"
     else:
-        executed_nodes, resolved_payloads = _run_manual_stage_pipeline(stage_payloads)
+        executed_nodes, resolved_payloads, node_attempts, stage_checkpoints = _run_manual_stage_pipeline(
+            stage_payloads,
+            max_stage_retries=stage_retry_budget,
+        )
         execution_mode = "manual"
 
     sim_result = assemble_sim_result_from_stage_payloads(resolved_payloads)
@@ -216,5 +296,7 @@ def run_simulation_with_backend(
         backend=selected,
         execution_mode=execution_mode,
         executed_nodes=executed_nodes,
+        node_attempts=node_attempts,
+        stage_checkpoints=stage_checkpoints,
     )
     return sim_result

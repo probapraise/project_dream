@@ -13,6 +13,16 @@ def _seed() -> SeedInput:
     )
 
 
+def _seed_with_suffix(suffix: str) -> SeedInput:
+    return SeedInput(
+        seed_id=f"SEED-ORCH-{suffix}",
+        title=f"오케스트레이터 테스트 {suffix}",
+        summary="백엔드 배치 동등성 검증",
+        board_id="B07",
+        zone_id="D",
+    )
+
+
 def _fake_sim_result() -> dict:
     return {
         "thread_candidates": [
@@ -47,6 +57,25 @@ def _fake_sim_result() -> dict:
         },
         "thread_state": {"status": "visible", "total_reports": 0},
     }
+
+
+def _fake_sim_result_with_unresolved_stage_payloads() -> dict:
+    payload = _fake_sim_result()
+    payload["selected_thread"] = None
+    payload["end_condition"] = {
+        "termination_reason": "round_limit",
+        "ended_round": 2,
+        "ended_early": False,
+        "status": "visible",
+    }
+    payload["thread_state"] = {
+        "status": "locked",
+        "total_reports": 4,
+        "termination_reason": "moderation_lock",
+        "ended_round": 2,
+        "ended_early": True,
+    }
+    return payload
 
 
 def _fake_langgraph_graph_module():
@@ -315,3 +344,136 @@ def test_runtime_langgraph_backend_applies_stage_node_helpers(monkeypatch: pytes
 
     assert payload["selected_thread"]["stage_helper_marker"] == "langgraph"
     assert payload["end_condition"]["termination_reason"] == "langgraph-stage-helper"
+
+
+def test_runtime_manual_stage_nodes_apply_domain_normalization(monkeypatch: pytest.MonkeyPatch):
+    import project_dream.orchestrator_runtime as runtime
+
+    monkeypatch.setattr(runtime, "run_simulation", lambda **kwargs: _fake_sim_result_with_unresolved_stage_payloads())
+
+    payload = runtime.run_simulation_with_backend(
+        seed=_seed(),
+        rounds=3,
+        corpus=["ctx-1"],
+        backend="manual",
+    )
+
+    assert payload["selected_thread"] is not None
+    assert payload["selected_thread"]["candidate_id"] == "TC-1"
+    assert payload["end_condition"]["status"] == "locked"
+    assert payload["end_condition"]["termination_reason"] == "moderation_lock"
+
+
+def test_runtime_langgraph_stage_nodes_apply_domain_normalization(monkeypatch: pytest.MonkeyPatch):
+    import project_dream.orchestrator_runtime as runtime
+
+    def fake_import(name: str):
+        if name == "langgraph":
+            return object()
+        if name == "langgraph.graph":
+            return _fake_langgraph_graph_module()
+        raise ImportError(name)
+
+    monkeypatch.setattr(runtime.importlib, "import_module", fake_import)
+    monkeypatch.setattr(runtime, "run_simulation", lambda **kwargs: _fake_sim_result_with_unresolved_stage_payloads())
+
+    payload = runtime.run_simulation_with_backend(
+        seed=_seed(),
+        rounds=3,
+        corpus=["ctx-1"],
+        backend="langgraph",
+    )
+
+    assert payload["selected_thread"] is not None
+    assert payload["selected_thread"]["candidate_id"] == "TC-1"
+    assert payload["end_condition"]["status"] == "locked"
+    assert payload["end_condition"]["termination_reason"] == "moderation_lock"
+
+
+def test_runtime_stage_node_retry_records_checkpoints(monkeypatch: pytest.MonkeyPatch):
+    import project_dream.orchestrator_runtime as runtime
+
+    monkeypatch.setattr(runtime, "run_simulation", lambda **kwargs: _fake_sim_result())
+    attempts = {"moderation": 0}
+
+    def flaky_moderation(payload: dict) -> dict:
+        attempts["moderation"] += 1
+        if attempts["moderation"] == 1:
+            raise RuntimeError("transient stage failure")
+        updated = dict(payload)
+        decisions = list(updated.get("moderation_decisions", []))
+        if decisions:
+            decisions[0] = dict(decisions[0])
+            decisions[0]["retry_marker"] = True
+        updated["moderation_decisions"] = decisions
+        return updated
+
+    monkeypatch.setattr(runtime, "_run_stage_node_moderation", flaky_moderation)
+
+    payload = runtime.run_simulation_with_backend(
+        seed=_seed(),
+        rounds=3,
+        corpus=["ctx-1"],
+        backend="manual",
+        max_stage_retries=1,
+    )
+
+    assert payload["moderation_decisions"][0]["retry_marker"] is True
+    assert payload["graph_node_trace"]["node_attempts"]["moderation"] == 2
+    checkpoints = payload["graph_node_trace"]["stage_checkpoints"]
+    retry_events = [entry for entry in checkpoints if entry["node_id"] == "moderation" and entry["outcome"] == "retry"]
+    success_events = [
+        entry for entry in checkpoints if entry["node_id"] == "moderation" and entry["outcome"] == "success"
+    ]
+    assert len(retry_events) == 1
+    assert len(success_events) == 1
+
+
+def test_runtime_batch_manual_and_langgraph_parity(monkeypatch: pytest.MonkeyPatch):
+    import project_dream.orchestrator_runtime as runtime
+
+    def fake_import(name: str):
+        if name == "langgraph":
+            return object()
+        if name == "langgraph.graph":
+            return _fake_langgraph_graph_module()
+        raise ImportError(name)
+
+    def fake_run_simulation(*, seed, rounds, corpus, max_retries=2, packs=None):
+        payload = _fake_sim_result()
+        selected = {
+            "candidate_id": f"TC-{seed.seed_id}",
+            "thread_template_id": "T1",
+            "comment_flow_id": "P1",
+            "score": 0.9,
+        }
+        payload["thread_candidates"] = [dict(selected)]
+        payload["selected_thread"] = dict(selected)
+        payload["thread_state"] = {
+            "status": "visible",
+            "total_reports": len(str(seed.seed_id)),
+            "board_id": seed.board_id,
+        }
+        payload["end_condition"] = {
+            "termination_reason": "round_limit",
+            "ended_round": rounds,
+            "ended_early": False,
+            "status": "visible",
+        }
+        return payload
+
+    monkeypatch.setattr(runtime.importlib, "import_module", fake_import)
+    monkeypatch.setattr(runtime, "run_simulation", fake_run_simulation)
+
+    seeds = [_seed_with_suffix("A"), _seed_with_suffix("B"), _seed_with_suffix("C")]
+    for seed in seeds:
+        manual = runtime.run_simulation_with_backend(seed=seed, rounds=3, corpus=["ctx-1"], backend="manual")
+        langgraph = runtime.run_simulation_with_backend(seed=seed, rounds=3, corpus=["ctx-1"], backend="langgraph")
+
+        assert manual["thread_state"] == langgraph["thread_state"]
+        assert manual["selected_thread"] == langgraph["selected_thread"]
+        assert manual["end_condition"] == langgraph["end_condition"]
+        assert manual["rounds"] == langgraph["rounds"]
+        assert manual["gate_logs"] == langgraph["gate_logs"]
+        assert manual["action_logs"] == langgraph["action_logs"]
+        assert manual["graph_node_trace"]["node_attempts"] == langgraph["graph_node_trace"]["node_attempts"]

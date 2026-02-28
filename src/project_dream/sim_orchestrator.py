@@ -48,6 +48,138 @@ class SimulationStagePayloads(TypedDict):
     end_condition: EndConditionStagePayload
 
 
+def _as_dict_list(values: object) -> list[dict]:
+    if not isinstance(values, list):
+        return []
+    out: list[dict] = []
+    for value in values:
+        if isinstance(value, dict):
+            out.append(dict(value))
+    return out
+
+
+def _coerce_round_number(value: object) -> int:
+    try:
+        round_number = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, round_number)
+
+
+def _normalize_persona_memory(memory_payload: object) -> dict[str, list[str]]:
+    if not isinstance(memory_payload, dict):
+        return {}
+    normalized: dict[str, list[str]] = {}
+    for raw_persona_id, raw_entries in memory_payload.items():
+        if not isinstance(raw_entries, list):
+            continue
+        entries: list[str] = []
+        for raw_entry in raw_entries:
+            text = str(raw_entry).strip()
+            if text:
+                entries.append(text)
+        normalized[str(raw_persona_id)] = entries
+    return normalized
+
+
+def run_stage_node_thread_candidate(stage_payload: ThreadCandidateStagePayload | dict) -> ThreadCandidateStagePayload:
+    payload = dict(stage_payload) if isinstance(stage_payload, dict) else {}
+    thread_candidates = _as_dict_list(payload.get("thread_candidates"))
+
+    selected_thread_raw = payload.get("selected_thread")
+    selected_thread = dict(selected_thread_raw) if isinstance(selected_thread_raw, dict) else None
+    candidate_ids = {
+        str(candidate.get("candidate_id", "")).strip()
+        for candidate in thread_candidates
+        if str(candidate.get("candidate_id", "")).strip()
+    }
+
+    if candidate_ids:
+        selected_id = str((selected_thread or {}).get("candidate_id", "")).strip()
+        if not selected_id or selected_id not in candidate_ids:
+            selected_thread = _select_thread_candidate(thread_candidates)
+
+    return {
+        "thread_candidates": thread_candidates,
+        "selected_thread": selected_thread,
+    }
+
+
+def run_stage_node_round_loop(stage_payload: RoundLoopStagePayload | dict) -> RoundLoopStagePayload:
+    payload = dict(stage_payload) if isinstance(stage_payload, dict) else {}
+    return {
+        "rounds": _as_dict_list(payload.get("rounds")),
+        "gate_logs": _as_dict_list(payload.get("gate_logs")),
+        "action_logs": _as_dict_list(payload.get("action_logs")),
+        "persona_memory": _normalize_persona_memory(payload.get("persona_memory")),
+    }
+
+
+def run_stage_node_moderation(stage_payload: ModerationStagePayload | dict) -> ModerationStagePayload:
+    payload = dict(stage_payload) if isinstance(stage_payload, dict) else {}
+    round_summaries = sorted(_as_dict_list(payload.get("round_summaries")), key=lambda row: _coerce_round_number(row.get("round")))
+    moderation_rows = sorted(
+        _as_dict_list(payload.get("moderation_decisions")),
+        key=lambda row: _coerce_round_number(row.get("round")),
+    )
+
+    moderation_decisions: list[dict] = []
+    for index, row in enumerate(moderation_rows, start=1):
+        normalized = dict(row)
+        if _coerce_round_number(normalized.get("round")) <= 0:
+            normalized["round"] = index
+        normalized.setdefault("action_type", "NO_OP")
+        normalized.setdefault("reason_rule_id", "RULE-PLZ-UI-01")
+        moderation_decisions.append(normalized)
+
+    return {
+        "round_summaries": round_summaries,
+        "moderation_decisions": moderation_decisions,
+    }
+
+
+def run_stage_node_end_condition(stage_payload: EndConditionStagePayload | dict) -> EndConditionStagePayload:
+    payload = dict(stage_payload) if isinstance(stage_payload, dict) else {}
+    end_condition_raw = payload.get("end_condition")
+    thread_state_raw = payload.get("thread_state")
+
+    end_condition = dict(end_condition_raw) if isinstance(end_condition_raw, dict) else {}
+    thread_state = dict(thread_state_raw) if isinstance(thread_state_raw, dict) else None
+    thread_state_view = thread_state or {}
+
+    status = str(thread_state_view.get("status") or end_condition.get("status") or "visible")
+    lock_statuses = {"locked", "ghost", "sanctioned"}
+    termination_reason = str(
+        thread_state_view.get("termination_reason")
+        or end_condition.get("termination_reason")
+        or ("moderation_lock" if status in lock_statuses else "round_limit")
+    )
+    ended_round = _coerce_round_number(end_condition.get("ended_round", thread_state_view.get("ended_round", 0)))
+
+    if "ended_early" in end_condition:
+        ended_early = bool(end_condition.get("ended_early"))
+    elif "ended_early" in thread_state_view:
+        ended_early = bool(thread_state_view.get("ended_early"))
+    else:
+        ended_early = termination_reason == "moderation_lock"
+
+    normalized_end_condition = {
+        "termination_reason": termination_reason,
+        "ended_round": ended_round,
+        "ended_early": ended_early,
+        "status": status,
+    }
+    normalized_thread_state = None
+    if thread_state is not None:
+        normalized_thread_state = dict(thread_state)
+        normalized_thread_state.update(normalized_end_condition)
+
+    return {
+        "end_condition": normalized_end_condition,
+        "thread_state": normalized_thread_state,
+    }
+
+
 def _select_community_id(seed, packs) -> str:
     if not packs:
         return f"ZONE-{seed.zone_id}"
