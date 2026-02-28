@@ -8,6 +8,7 @@ from pathlib import Path
 
 from project_dream.app_service import evaluate_and_persist, simulate_and_persist
 from project_dream.data_ingest import build_corpus_from_packs
+from project_dream.eval_export import export_external_eval_bundle
 from project_dream.infra.http_server import serve
 from project_dream.infra.store import FileRunRepository
 from project_dream.infra.web_api import ProjectDreamAPI
@@ -140,6 +141,12 @@ def build_parser() -> argparse.ArgumentParser:
     eva.add_argument("--run-id", required=False, default=None)
     eva.add_argument("--metric-set", required=False, default="v1")
 
+    eva_export = sub.add_parser("eval-export")
+    eva_export.add_argument("--runs-dir", required=False, default="runs")
+    eva_export.add_argument("--run-id", required=False, default=None)
+    eva_export.add_argument("--output-dir", required=False, default=None)
+    eva_export.add_argument("--max-contexts", type=int, default=5)
+
     reg = sub.add_parser("regress")
     reg.add_argument("--seeds-dir", required=False, default="examples/seeds/regression")
     reg.add_argument("--packs-dir", required=False, default="packs")
@@ -213,6 +220,16 @@ def main(argv: list[str] | None = None) -> int:
             run_id=args.run_id,
             metric_set=args.metric_set,
         )
+    elif args.command == "eval-export":
+        repository = FileRunRepository(Path(args.runs_dir))
+        run_dir = repository.get_run(args.run_id) if args.run_id else repository.find_latest_run()
+        output_dir = Path(args.output_dir) if args.output_dir else None
+        manifest = export_external_eval_bundle(
+            run_dir,
+            output_dir=output_dir,
+            max_contexts=args.max_contexts,
+        )
+        print(json.dumps(manifest, ensure_ascii=False))
     elif args.command == "regress":
         summary = run_regression_batch(
             seeds_dir=Path(args.seeds_dir),

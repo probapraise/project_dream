@@ -26,6 +26,16 @@ def test_cli_supports_regress_command():
     assert args.corpus_dir == "corpus"
 
 
+def test_cli_supports_eval_export_command():
+    parser = build_parser()
+    args = parser.parse_args(["eval-export"])
+    assert args.command == "eval-export"
+    assert args.runs_dir == "runs"
+    assert args.run_id is None
+    assert args.output_dir is None
+    assert args.max_contexts == 5
+
+
 def test_cli_supports_regress_live_command_with_defaults():
     parser = build_parser()
     args = parser.parse_args(["regress-live"])
