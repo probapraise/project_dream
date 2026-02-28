@@ -91,6 +91,40 @@ def _select_thread_candidate(candidates: list[dict]) -> dict:
     return max(candidates, key=lambda item: float(item.get("score", 0.0)))
 
 
+def _build_round_summaries(round_logs: list[dict], action_logs: list[dict]) -> list[dict]:
+    policy_actions = {"HIDE_PREVIEW", "LOCK_THREAD", "GHOST_THREAD", "SANCTION_USER"}
+    rounds = sorted({int(row.get("round", 0)) for row in round_logs if int(row.get("round", 0)) > 0})
+    summaries: list[dict] = []
+
+    for round_idx in rounds:
+        rows = [row for row in round_logs if int(row.get("round", 0)) == round_idx]
+        reports = [
+            row
+            for row in action_logs
+            if int(row.get("round", 0)) == round_idx and row.get("action_type") == "REPORT"
+        ]
+        policies = [
+            row
+            for row in action_logs
+            if int(row.get("round", 0)) == round_idx and row.get("action_type") in policy_actions
+        ]
+
+        last_status = rows[-1].get("status", "visible") if rows else "visible"
+        max_score = max(float(row.get("score", 0.0)) for row in rows) if rows else 0.0
+        summaries.append(
+            {
+                "round": round_idx,
+                "participant_count": len(rows),
+                "report_events": len(reports),
+                "policy_events": len(policies),
+                "status": last_status,
+                "max_score": round(max_score, 4),
+            }
+        )
+
+    return summaries
+
+
 def run_simulation(
     seed,
     rounds: int,
@@ -241,10 +275,12 @@ def run_simulation(
         "ended_early": ended_early,
         "status": status,
     }
+    round_summaries = _build_round_summaries(round_logs, action_logs)
 
     return {
         "thread_candidates": thread_candidates,
         "selected_thread": selected_thread,
+        "round_summaries": round_summaries,
         "end_condition": end_condition,
         "rounds": round_logs,
         "gate_logs": gate_logs,

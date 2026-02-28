@@ -92,6 +92,30 @@ def test_simulation_ends_early_on_locked_status():
     assert state["ended_round"] < 10
 
 
+def test_simulation_emits_round_summaries():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    seed = SeedInput(
+        seed_id="SEED-SUMMARY-001",
+        title="라운드 요약 테스트",
+        summary="라운드별 참여와 신고를 요약한다",
+        board_id="B07",
+        zone_id="D",
+    )
+
+    result = run_simulation(seed=seed, rounds=4, corpus=["샘플"], packs=packs)
+
+    summaries = result["round_summaries"]
+    assert summaries
+    assert len(summaries) == result["thread_state"]["ended_round"]
+
+    first = summaries[0]
+    assert first["round"] == 1
+    assert first["participant_count"] >= 1
+    assert "status" in first
+    assert "report_events" in first
+    assert "policy_events" in first
+
+
 def test_simulation_emits_policy_transition_event_fields():
     packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
     seed = SeedInput(
