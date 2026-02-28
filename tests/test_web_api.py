@@ -110,14 +110,27 @@ def test_web_api_list_regression_summaries(tmp_path: Path):
     latest_id = Path(latest["summary_path"]).name
 
     assert listed["count"] == 2
+    assert listed["total"] == 2
+    assert listed["offset"] == 0
     assert len(listed["items"]) == 2
     assert listed["items"][0]["summary_id"] == latest_id
     assert listed["items"][0]["summary_path"].endswith(latest_id)
     assert listed["items"][0]["metric_set"] in {"v1", "v2"}
     assert isinstance(listed["items"][0]["pass_fail"], bool)
 
-    limited = api.list_regression_summaries(limit=1)
+    filtered_metric = api.list_regression_summaries(metric_set="v1")
+    assert filtered_metric["count"] == 1
+    assert filtered_metric["items"][0]["metric_set"] == "v1"
+
+    filtered_pass = api.list_regression_summaries(pass_fail=True)
+    assert filtered_pass["count"] >= 1
+    assert all(item["pass_fail"] is True for item in filtered_pass["items"])
+
+    limited = api.list_regression_summaries(limit=1, offset=1)
     assert limited["count"] == 1
+    assert limited["total"] == 2
+    assert limited["limit"] == 1
+    assert limited["offset"] == 1
     assert len(limited["items"]) == 1
 
 

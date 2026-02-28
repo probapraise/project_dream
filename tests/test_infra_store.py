@@ -222,3 +222,60 @@ def test_file_run_repository_lists_runs_with_filters_and_pagination(tmp_path: Pa
     assert paged["limit"] == 1
     assert paged["offset"] == 1
     assert paged["items"][0]["run_id"] == listed["items"][1]["run_id"]
+
+
+def test_file_run_repository_lists_regressions_with_filters_and_pagination(tmp_path: Path):
+    repo = FileRunRepository(tmp_path / "runs")
+    regressions_dir = tmp_path / "runs" / "regressions"
+    regressions_dir.mkdir(parents=True, exist_ok=True)
+
+    first_path = regressions_dir / "regression-20260228-000000-000001.json"
+    second_path = regressions_dir / "regression-20260228-000001-000001.json"
+
+    first_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "regression.v1",
+                "metric_set": "v1",
+                "generated_at_utc": "2026-02-28T00:00:00+00:00",
+                "pass_fail": True,
+                "totals": {"seed_runs": 2},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    second_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "regression.v1",
+                "metric_set": "v2",
+                "generated_at_utc": "2026-02-28T00:01:00+00:00",
+                "pass_fail": False,
+                "totals": {"seed_runs": 1},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    listed = repo.list_regression_summaries()
+    assert listed["count"] == 2
+    assert listed["total"] == 2
+    assert listed["offset"] == 0
+    assert listed["items"][0]["summary_id"] == second_path.name
+
+    filtered_metric = repo.list_regression_summaries(metric_set="v1")
+    assert filtered_metric["count"] == 1
+    assert filtered_metric["items"][0]["summary_id"] == first_path.name
+
+    filtered_pass = repo.list_regression_summaries(pass_fail=False)
+    assert filtered_pass["count"] == 1
+    assert filtered_pass["items"][0]["summary_id"] == second_path.name
+
+    paged = repo.list_regression_summaries(limit=1, offset=1)
+    assert paged["count"] == 1
+    assert paged["total"] == 2
+    assert paged["limit"] == 1
+    assert paged["offset"] == 1
+    assert paged["items"][0]["summary_id"] == first_path.name
