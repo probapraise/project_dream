@@ -102,6 +102,8 @@ def persist_run(output_dir: Path, sim_result: dict, report: dict) -> Path:
             trace_schema_version = str(graph_node_trace.get("schema_version", "graph_node_trace.v1"))
             trace_backend = str(graph_node_trace.get("backend", "manual"))
             nodes = graph_node_trace.get("nodes", [])
+            node_attempts = graph_node_trace.get("node_attempts", {})
+            stage_checkpoints = graph_node_trace.get("stage_checkpoints", [])
             if isinstance(nodes, list):
                 for row in nodes:
                     if not isinstance(row, dict):
@@ -110,6 +112,38 @@ def persist_run(output_dir: Path, sim_result: dict, report: dict) -> Path:
                         json.dumps(
                             {
                                 "type": "graph_node",
+                                "schema_version": trace_schema_version,
+                                "backend": trace_backend,
+                                **row,
+                            },
+                            ensure_ascii=False,
+                        )
+                        + "\n"
+                    )
+            if isinstance(node_attempts, dict):
+                for node_id, raw_attempts in node_attempts.items():
+                    attempts = int(raw_attempts) if isinstance(raw_attempts, int) else 0
+                    fp.write(
+                        json.dumps(
+                            {
+                                "type": "graph_node_attempt",
+                                "schema_version": trace_schema_version,
+                                "backend": trace_backend,
+                                "node_id": str(node_id),
+                                "attempts": max(0, attempts),
+                            },
+                            ensure_ascii=False,
+                        )
+                        + "\n"
+                    )
+            if isinstance(stage_checkpoints, list):
+                for row in stage_checkpoints:
+                    if not isinstance(row, dict):
+                        continue
+                    fp.write(
+                        json.dumps(
+                            {
+                                "type": "stage_checkpoint",
                                 "schema_version": trace_schema_version,
                                 "backend": trace_backend,
                                 **row,

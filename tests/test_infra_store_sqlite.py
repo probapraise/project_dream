@@ -54,6 +54,19 @@ def _sample_sim_result() -> dict:
         "graph_node_trace": {
             "schema_version": "graph_node_trace.v1",
             "backend": "manual",
+            "node_attempts": {
+                "thread_candidate": 1,
+                "round_loop": 1,
+                "moderation": 2,
+                "end_condition": 1,
+            },
+            "stage_checkpoints": [
+                {"node_id": "thread_candidate", "attempt": 1, "outcome": "success"},
+                {"node_id": "round_loop", "attempt": 1, "outcome": "success"},
+                {"node_id": "moderation", "attempt": 1, "outcome": "retry", "error": "transient"},
+                {"node_id": "moderation", "attempt": 2, "outcome": "success"},
+                {"node_id": "end_condition", "attempt": 1, "outcome": "success"},
+            ],
             "nodes": [
                 {"node_id": "thread_candidate", "event_type": "thread_candidate", "event_count": 1},
                 {"node_id": "round_loop", "event_type": "round_summary", "event_count": 1},
@@ -99,6 +112,10 @@ def test_sqlite_run_repository_persists_and_reads_run_artifacts(tmp_path: Path):
     assert runlog["rows"]
     graph_nodes = [row for row in runlog["rows"] if row.get("type") == "graph_node"]
     assert len(graph_nodes) == 4
+    graph_node_attempts = [row for row in runlog["rows"] if row.get("type") == "graph_node_attempt"]
+    assert len(graph_node_attempts) == 4
+    stage_checkpoints = [row for row in runlog["rows"] if row.get("type") == "stage_checkpoint"]
+    assert len(stage_checkpoints) == 5
 
 
 def test_sqlite_run_repository_updates_eval_and_latest_lookup(tmp_path: Path):
@@ -158,6 +175,10 @@ def test_sqlite_run_repository_lists_runs_with_filters_and_pagination(tmp_path: 
     assert listed["limit"] == 20
     assert listed["offset"] == 0
     assert [row["run_id"] for row in listed["items"]] == [run_second.name, run_first.name]
+    by_id = {row["run_id"]: row for row in listed["items"]}
+    assert by_id[run_first.name]["stage_retry_count"] == 1
+    assert by_id[run_first.name]["stage_failure_count"] == 0
+    assert by_id[run_first.name]["max_stage_attempts"] == 2
 
     filtered_seed = repo.list_runs(seed_id="SEED-SQLITE-LIST-1")
     assert filtered_seed["count"] == 1
