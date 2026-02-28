@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from project_dream.regression_runner import run_regression_batch
+import project_dream.regression_runner as regression_runner
 
 
 def _write_seed(path: Path, seed_id: str, board_id: str, zone_id: str) -> None:
@@ -62,3 +63,49 @@ def test_run_regression_batch_raises_when_no_seed_files(tmp_path: Path):
 def test_regression_seed_fixture_count():
     seeds = sorted(Path("examples/seeds/regression").glob("seed_*.json"))
     assert len(seeds) == 10
+
+
+def test_run_regression_batch_uses_retrieved_context_corpus(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    seeds_dir = tmp_path / "seeds"
+    seeds_dir.mkdir(parents=True, exist_ok=True)
+    _write_seed(seeds_dir / "seed_001.json", "SEED-R-CONTEXT-001", "B07", "D")
+
+    captured_corpora: list[list[str]] = []
+    original_run_simulation = regression_runner.run_simulation
+
+    def spy_run_simulation(*, seed, rounds, corpus, max_retries=2, packs=None):
+        captured_corpora.append(list(corpus))
+        return original_run_simulation(
+            seed=seed,
+            rounds=rounds,
+            corpus=corpus,
+            max_retries=max_retries,
+            packs=packs,
+        )
+
+    monkeypatch.setattr(regression_runner, "run_simulation", spy_run_simulation)
+    monkeypatch.setattr(regression_runner, "build_index", lambda packs: {"fake": "index"}, raising=False)
+    monkeypatch.setattr(
+        regression_runner,
+        "retrieve_context",
+        lambda index, **kwargs: {"bundle": {}, "corpus": [f"ctx-{kwargs['board_id']}-{kwargs['zone_id']}"]},
+        raising=False,
+    )
+
+    run_regression_batch(
+        seeds_dir=seeds_dir,
+        packs_dir=Path("packs"),
+        output_dir=tmp_path / "runs",
+        rounds=3,
+        max_seeds=1,
+        metric_set="v1",
+        min_community_coverage=1,
+        min_conflict_frame_runs=0,
+        min_moderation_hook_runs=0,
+        min_validation_warning_runs=0,
+    )
+
+    assert captured_corpora
+    assert captured_corpora[0] == ["ctx-B07-D"]

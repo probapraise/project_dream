@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from project_dream.eval_suite import REQUIRED_REPORT_KEYS, evaluate_run
+from project_dream.kb_index import build_index, retrieve_context
 from project_dream.models import SeedInput
 from project_dream.pack_service import load_packs
 from project_dream.report_generator import build_report_v1
@@ -63,6 +64,7 @@ def run_regression_batch(
     min_validation_warning_runs: int = 1,
 ) -> dict:
     packs = load_packs(packs_dir, enforce_phase1_minimums=True)
+    index = build_index(packs)
     seed_files = _seed_files(seeds_dir, max_seeds=max_seeds)
 
     run_summaries: list[dict] = []
@@ -75,7 +77,21 @@ def run_regression_batch(
 
     for seed_file in seed_files:
         seed = SeedInput.model_validate_json(seed_file.read_text(encoding="utf-8"))
-        sim_result = run_simulation(seed=seed, rounds=rounds, corpus=[], packs=packs)
+        context = retrieve_context(
+            index,
+            task=f"{seed.title} {seed.summary}",
+            seed=seed.summary,
+            board_id=seed.board_id,
+            zone_id=seed.zone_id,
+            persona_ids=[],
+            top_k=3,
+        )
+        sim_result = run_simulation(
+            seed=seed,
+            rounds=rounds,
+            corpus=context["corpus"],
+            packs=packs,
+        )
         report = build_report_v1(seed, sim_result, packs)
         run_dir = persist_run(output_dir, sim_result, report)
         eval_result = evaluate_run(run_dir, metric_set=metric_set)
