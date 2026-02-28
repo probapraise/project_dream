@@ -148,6 +148,12 @@ def build_parser() -> argparse.ArgumentParser:
     sim.add_argument("--rounds", type=int, default=3)
     sim.add_argument("--repo-backend", required=False, choices=["file", "sqlite"], default="file")
     sim.add_argument("--sqlite-db-path", required=False, default=None)
+    sim.add_argument(
+        "--orchestrator-backend",
+        required=False,
+        choices=["manual", "langgraph"],
+        default="manual",
+    )
 
     ingest = sub.add_parser("ingest")
     ingest.add_argument("--packs-dir", required=False, default="packs")
@@ -180,6 +186,12 @@ def build_parser() -> argparse.ArgumentParser:
     reg.add_argument("--min-conflict-frame-runs", type=int, default=2)
     reg.add_argument("--min-moderation-hook-runs", type=int, default=1)
     reg.add_argument("--min-validation-warning-runs", type=int, default=1)
+    reg.add_argument(
+        "--orchestrator-backend",
+        required=False,
+        choices=["manual", "langgraph"],
+        default="manual",
+    )
 
     reg_live = sub.add_parser("regress-live")
     reg_live.add_argument("--seeds-dir", required=False, default="examples/seeds/regression")
@@ -203,6 +215,12 @@ def build_parser() -> argparse.ArgumentParser:
     reg_live.add_argument("--update-baseline", action="store_true")
     reg_live.add_argument("--allowed-rate-drop", type=float, default=0.05)
     reg_live.add_argument("--allowed-community-drop", type=int, default=1)
+    reg_live.add_argument(
+        "--orchestrator-backend",
+        required=False,
+        choices=["manual", "langgraph"],
+        default="manual",
+    )
 
     srv = sub.add_parser("serve")
     srv.add_argument("--host", required=False, default="127.0.0.1")
@@ -233,6 +251,7 @@ def main(argv: list[str] | None = None) -> int:
             packs_dir=Path(args.packs_dir),
             corpus_dir=Path(args.corpus_dir),
             repository=repository,
+            orchestrator_backend=args.orchestrator_backend,
         )
     elif args.command == "ingest":
         summary = build_corpus_from_packs(
@@ -278,6 +297,7 @@ def main(argv: list[str] | None = None) -> int:
             min_conflict_frame_runs=args.min_conflict_frame_runs,
             min_moderation_hook_runs=args.min_moderation_hook_runs,
             min_validation_warning_runs=args.min_validation_warning_runs,
+            orchestrator_backend=args.orchestrator_backend,
         )
         return 0 if summary["pass_fail"] else 2
     elif args.command == "regress-live":
@@ -302,6 +322,7 @@ def main(argv: list[str] | None = None) -> int:
                 min_conflict_frame_runs=args.min_conflict_frame_runs,
                 min_moderation_hook_runs=args.min_moderation_hook_runs,
                 min_validation_warning_runs=args.min_validation_warning_runs,
+                orchestrator_backend=args.orchestrator_backend,
             )
         if not summary["pass_fail"]:
             return 2

@@ -5,6 +5,7 @@ import pytest
 
 from project_dream.regression_runner import run_regression_batch
 import project_dream.regression_runner as regression_runner
+from project_dream.sim_orchestrator import run_simulation as base_run_simulation
 
 
 def _write_seed(path: Path, seed_id: str, board_id: str, zone_id: str) -> None:
@@ -85,11 +86,17 @@ def test_run_regression_batch_uses_retrieved_context_corpus(
     _write_seed(seeds_dir / "seed_001.json", "SEED-R-CONTEXT-001", "B07", "D")
 
     captured_corpora: list[list[str]] = []
-    original_run_simulation = regression_runner.run_simulation
-
-    def spy_run_simulation(*, seed, rounds, corpus, max_retries=2, packs=None):
+    def spy_run_simulation_with_backend(
+        *,
+        seed,
+        rounds,
+        corpus,
+        max_retries=2,
+        packs=None,
+        backend="manual",
+    ):
         captured_corpora.append(list(corpus))
-        return original_run_simulation(
+        return base_run_simulation(
             seed=seed,
             rounds=rounds,
             corpus=corpus,
@@ -97,7 +104,11 @@ def test_run_regression_batch_uses_retrieved_context_corpus(
             packs=packs,
         )
 
-    monkeypatch.setattr(regression_runner, "run_simulation", spy_run_simulation)
+    monkeypatch.setattr(
+        regression_runner,
+        "run_simulation_with_backend",
+        spy_run_simulation_with_backend,
+    )
     monkeypatch.setattr(regression_runner, "build_index", lambda packs: {"fake": "index"}, raising=False)
     monkeypatch.setattr(
         regression_runner,
@@ -141,11 +152,17 @@ def test_run_regression_batch_merges_ingested_corpus(
     (corpus_dir / "generated.jsonl").write_text("", encoding="utf-8")
 
     captured_corpora: list[list[str]] = []
-    original_run_simulation = regression_runner.run_simulation
-
-    def spy_run_simulation(*, seed, rounds, corpus, max_retries=2, packs=None):
+    def spy_run_simulation_with_backend(
+        *,
+        seed,
+        rounds,
+        corpus,
+        max_retries=2,
+        packs=None,
+        backend="manual",
+    ):
         captured_corpora.append(list(corpus))
-        return original_run_simulation(
+        return base_run_simulation(
             seed=seed,
             rounds=rounds,
             corpus=corpus,
@@ -153,7 +170,11 @@ def test_run_regression_batch_merges_ingested_corpus(
             packs=packs,
         )
 
-    monkeypatch.setattr(regression_runner, "run_simulation", spy_run_simulation)
+    monkeypatch.setattr(
+        regression_runner,
+        "run_simulation_with_backend",
+        spy_run_simulation_with_backend,
+    )
     monkeypatch.setattr(regression_runner, "build_index", lambda packs: {"fake": "index"}, raising=False)
     monkeypatch.setattr(
         regression_runner,
@@ -178,3 +199,53 @@ def test_run_regression_batch_merges_ingested_corpus(
 
     assert captured_corpora
     assert captured_corpora[0] == ["ctx-B07-D", "ctx-reference", "ctx-refined"]
+
+
+def test_run_regression_batch_forwards_orchestrator_backend(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    seeds_dir = tmp_path / "seeds"
+    seeds_dir.mkdir(parents=True, exist_ok=True)
+    _write_seed(seeds_dir / "seed_001.json", "SEED-R-CONTEXT-003", "B07", "D")
+
+    captured: dict = {}
+    def fake_run_simulation_with_backend(
+        *,
+        seed,
+        rounds,
+        corpus,
+        max_retries=2,
+        packs=None,
+        backend="manual",
+    ):
+        captured["backend"] = backend
+        return base_run_simulation(
+            seed=seed,
+            rounds=rounds,
+            corpus=corpus,
+            max_retries=max_retries,
+            packs=packs,
+        )
+
+    monkeypatch.setattr(
+        regression_runner,
+        "run_simulation_with_backend",
+        fake_run_simulation_with_backend,
+        raising=False,
+    )
+
+    run_regression_batch(
+        seeds_dir=seeds_dir,
+        packs_dir=Path("packs"),
+        output_dir=tmp_path / "runs",
+        rounds=3,
+        max_seeds=1,
+        metric_set="v1",
+        min_community_coverage=1,
+        min_conflict_frame_runs=0,
+        min_moderation_hook_runs=0,
+        min_validation_warning_runs=0,
+        orchestrator_backend="langgraph",
+    )
+
+    assert captured["backend"] == "langgraph"

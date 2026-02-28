@@ -35,7 +35,7 @@ class ProjectDreamAPI:
     def health(self) -> dict:
         return {"status": "ok", "service": "project-dream"}
 
-    def simulate(self, seed_payload: dict, rounds: int = 3) -> dict:
+    def simulate(self, seed_payload: dict, rounds: int = 3, orchestrator_backend: str = "manual") -> dict:
         seed = SeedInput.model_validate(seed_payload)
         run_dir = simulate_and_persist(
             seed,
@@ -43,6 +43,7 @@ class ProjectDreamAPI:
             packs_dir=self.packs_dir,
             corpus_dir=self.corpus_dir,
             repository=self.repository,
+            orchestrator_backend=orchestrator_backend,
         )
         return {"run_id": run_dir.name, "run_dir": str(run_dir)}
 
@@ -86,6 +87,7 @@ class ProjectDreamAPI:
         min_conflict_frame_runs: int = 2,
         min_moderation_hook_runs: int = 1,
         min_validation_warning_runs: int = 1,
+        orchestrator_backend: str = "manual",
     ) -> dict:
         return regress_and_persist(
             repository=self.repository,
@@ -99,6 +101,7 @@ class ProjectDreamAPI:
             min_conflict_frame_runs=min_conflict_frame_runs,
             min_moderation_hook_runs=min_moderation_hook_runs,
             min_validation_warning_runs=min_validation_warning_runs,
+            orchestrator_backend=orchestrator_backend,
         )
 
     def _build_kb_index(self) -> dict:

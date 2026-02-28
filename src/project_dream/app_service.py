@@ -6,9 +6,9 @@ from project_dream.infra.store import RunRepository
 from project_dream.kb_index import build_index, retrieve_context
 from project_dream.models import SeedInput
 from project_dream.pack_service import load_packs
+from project_dream.orchestrator_runtime import run_simulation_with_backend
 from project_dream.regression_runner import run_regression_batch
 from project_dream.report_generator import build_report_v1
-from project_dream.sim_orchestrator import run_simulation
 
 
 def _merge_unique_corpus(*groups: list[str]) -> list[str]:
@@ -31,6 +31,7 @@ def simulate_and_persist(
     packs_dir: Path,
     repository: RunRepository,
     corpus_dir: Path = Path("corpus"),
+    orchestrator_backend: str = "manual",
 ) -> Path:
     packs = load_packs(packs_dir, enforce_phase1_minimums=True)
     index = build_index(packs)
@@ -45,7 +46,14 @@ def simulate_and_persist(
     )
     ingested_corpus = load_corpus_texts(corpus_dir)
     merged_corpus = _merge_unique_corpus(context["corpus"], ingested_corpus)
-    sim_result = run_simulation(seed=seed, rounds=rounds, corpus=merged_corpus, packs=packs)
+    sim_result = run_simulation_with_backend(
+        seed=seed,
+        rounds=rounds,
+        corpus=merged_corpus,
+        packs=packs,
+        backend=orchestrator_backend,
+    )
+    sim_result["orchestrator_backend"] = orchestrator_backend
     sim_result["context_bundle"] = context["bundle"]
     sim_result["context_corpus"] = merged_corpus
     report = build_report_v1(seed, sim_result, packs)
@@ -77,6 +85,7 @@ def regress_and_persist(
     min_conflict_frame_runs: int = 2,
     min_moderation_hook_runs: int = 1,
     min_validation_warning_runs: int = 1,
+    orchestrator_backend: str = "manual",
 ) -> dict:
     return run_regression_batch(
         seeds_dir=seeds_dir,
@@ -90,4 +99,5 @@ def regress_and_persist(
         min_conflict_frame_runs=min_conflict_frame_runs,
         min_moderation_hook_runs=min_moderation_hook_runs,
         min_validation_warning_runs=min_validation_warning_runs,
+        orchestrator_backend=orchestrator_backend,
     )

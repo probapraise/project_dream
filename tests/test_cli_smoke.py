@@ -11,6 +11,7 @@ def test_cli_supports_simulate_command():
     assert args.corpus_dir == "corpus"
     assert args.repo_backend == "file"
     assert args.sqlite_db_path is None
+    assert args.orchestrator_backend == "manual"
 
 
 def test_cli_supports_ingest_command():
@@ -26,6 +27,7 @@ def test_cli_supports_regress_command():
     args = parser.parse_args(["regress"])
     assert args.command == "regress"
     assert args.corpus_dir == "corpus"
+    assert args.orchestrator_backend == "manual"
 
 
 def test_cli_supports_eval_export_command():
@@ -90,6 +92,45 @@ def test_cli_rejects_unknown_repository_backend():
         parser.parse_args(["simulate", "--seed", "seed.json", "--repo-backend", "unknown"])
 
 
+def test_cli_supports_orchestrator_backend_flags():
+    parser = build_parser()
+
+    sim_args = parser.parse_args(
+        [
+            "simulate",
+            "--seed",
+            "seed.json",
+            "--orchestrator-backend",
+            "langgraph",
+        ]
+    )
+    assert sim_args.orchestrator_backend == "langgraph"
+
+    regress_args = parser.parse_args(
+        [
+            "regress",
+            "--orchestrator-backend",
+            "langgraph",
+        ]
+    )
+    assert regress_args.orchestrator_backend == "langgraph"
+
+    regress_live_args = parser.parse_args(
+        [
+            "regress-live",
+            "--orchestrator-backend",
+            "langgraph",
+        ]
+    )
+    assert regress_live_args.orchestrator_backend == "langgraph"
+
+
+def test_cli_rejects_unknown_orchestrator_backend():
+    parser = build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["simulate", "--seed", "seed.json", "--orchestrator-backend", "unknown"])
+
+
 def test_cli_supports_regress_live_command_with_defaults():
     parser = build_parser()
     args = parser.parse_args(["regress-live"])
@@ -101,6 +142,7 @@ def test_cli_supports_regress_live_command_with_defaults():
     assert args.metric_set == "v2"
     assert args.llm_model == "gemini-3.1-flash"
     assert args.baseline_file == "runs/regressions/regress-live-baseline.json"
+    assert args.orchestrator_backend == "manual"
 
 
 def test_cli_serve_requires_api_token_when_not_set(monkeypatch: pytest.MonkeyPatch):

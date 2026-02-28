@@ -21,10 +21,19 @@ def test_simulate_and_persist_passes_retrieved_corpus(
 ):
     captured: dict = {}
 
-    def fake_run_simulation(*, seed, rounds, corpus, max_retries=2, packs=None):
+    def fake_run_simulation_with_backend(
+        *,
+        seed,
+        rounds,
+        corpus,
+        max_retries=2,
+        packs=None,
+        backend="manual",
+    ):
         captured["seed_id"] = seed.seed_id
         captured["rounds"] = rounds
         captured["corpus"] = corpus
+        captured["backend"] = backend
         return {
             "rounds": [],
             "gate_logs": [],
@@ -39,7 +48,11 @@ def test_simulate_and_persist_passes_retrieved_corpus(
             },
         }
 
-    monkeypatch.setattr(app_service, "run_simulation", fake_run_simulation)
+    monkeypatch.setattr(
+        app_service,
+        "run_simulation_with_backend",
+        fake_run_simulation_with_backend,
+    )
     monkeypatch.setattr(
         app_service,
         "build_report_v1",
@@ -66,6 +79,7 @@ def test_simulate_and_persist_passes_retrieved_corpus(
     assert captured["seed_id"] == "SEED-KB-001"
     assert captured["rounds"] == 3
     assert captured["corpus"]
+    assert captured["backend"] == "manual"
     assert any("장터기둥" in row or "B07" in row for row in captured["corpus"])
 
 
@@ -74,8 +88,17 @@ def test_simulate_and_persist_merges_ingested_corpus(
 ):
     captured: dict = {}
 
-    def fake_run_simulation(*, seed, rounds, corpus, max_retries=2, packs=None):
+    def fake_run_simulation_with_backend(
+        *,
+        seed,
+        rounds,
+        corpus,
+        max_retries=2,
+        packs=None,
+        backend="manual",
+    ):
         captured["corpus"] = list(corpus)
+        captured["backend"] = backend
         return {
             "rounds": [],
             "gate_logs": [],
@@ -90,7 +113,11 @@ def test_simulate_and_persist_merges_ingested_corpus(
             },
         }
 
-    monkeypatch.setattr(app_service, "run_simulation", fake_run_simulation)
+    monkeypatch.setattr(
+        app_service,
+        "run_simulation_with_backend",
+        fake_run_simulation_with_backend,
+    )
     monkeypatch.setattr(
         app_service,
         "build_report_v1",
@@ -130,3 +157,60 @@ def test_simulate_and_persist_merges_ingested_corpus(
     )
 
     assert captured["corpus"] == ["ctx-retrieved", "ctx-reference", "ctx-refined"]
+    assert captured["backend"] == "manual"
+
+
+def test_simulate_and_persist_forwards_orchestrator_backend(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    captured: dict = {}
+
+    def fake_run_simulation_with_backend(
+        *,
+        seed,
+        rounds,
+        corpus,
+        max_retries=2,
+        packs=None,
+        backend="manual",
+    ):
+        captured["backend"] = backend
+        return {
+            "rounds": [],
+            "gate_logs": [],
+            "action_logs": [],
+            "thread_state": {
+                "board_id": seed.board_id,
+                "community_id": "COM-PLZ-004",
+                "thread_template_id": "T1",
+                "comment_flow_id": "P1",
+                "status": "visible",
+                "total_reports": 0,
+            },
+        }
+
+    monkeypatch.setattr(app_service, "run_simulation_with_backend", fake_run_simulation_with_backend, raising=False)
+    monkeypatch.setattr(
+        app_service,
+        "build_report_v1",
+        lambda seed, sim_result, packs: {"schema_version": "report.v1", "seed_id": seed.seed_id},
+    )
+
+    seed = SeedInput(
+        seed_id="SEED-KB-003",
+        title="장터 분쟁",
+        summary="거래 사기 의혹이 확산되는 사건",
+        board_id="B07",
+        zone_id="D",
+    )
+    repo = _FakeRepository(tmp_path / "runs")
+
+    app_service.simulate_and_persist(
+        seed=seed,
+        rounds=3,
+        packs_dir=Path("packs"),
+        repository=repo,
+        orchestrator_backend="langgraph",
+    )
+
+    assert captured["backend"] == "langgraph"

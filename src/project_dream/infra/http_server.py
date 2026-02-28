@@ -149,7 +149,11 @@ def create_server(
                 if path == "/simulate":
                     seed_payload = body.get("seed", {})
                     rounds = int(body.get("rounds", 3))
-                    payload = api.simulate(seed_payload=seed_payload, rounds=rounds)
+                    payload = api.simulate(
+                        seed_payload=seed_payload,
+                        rounds=rounds,
+                        orchestrator_backend=body.get("orchestrator_backend", "manual"),
+                    )
                     self._send(200, payload)
                     return
 
@@ -171,6 +175,7 @@ def create_server(
                         min_conflict_frame_runs=int(body.get("min_conflict_frame_runs", 2)),
                         min_moderation_hook_runs=int(body.get("min_moderation_hook_runs", 1)),
                         min_validation_warning_runs=int(body.get("min_validation_warning_runs", 1)),
+                        orchestrator_backend=body.get("orchestrator_backend", "manual"),
                     )
                     self._send(200, payload)
                     return

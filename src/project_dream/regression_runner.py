@@ -6,9 +6,9 @@ from project_dream.data_ingest import load_corpus_texts
 from project_dream.eval_suite import REQUIRED_REPORT_KEYS, evaluate_run
 from project_dream.kb_index import build_index, retrieve_context
 from project_dream.models import SeedInput
+from project_dream.orchestrator_runtime import run_simulation_with_backend
 from project_dream.pack_service import load_packs
 from project_dream.report_generator import build_report_v1
-from project_dream.sim_orchestrator import run_simulation
 from project_dream.storage import persist_eval, persist_run
 
 
@@ -109,6 +109,7 @@ def run_regression_batch(
     min_conflict_frame_runs: int = 2,
     min_moderation_hook_runs: int = 1,
     min_validation_warning_runs: int = 1,
+    orchestrator_backend: str = "manual",
 ) -> dict:
     packs = load_packs(packs_dir, enforce_phase1_minimums=True)
     index = build_index(packs)
@@ -141,12 +142,14 @@ def run_regression_batch(
             top_k=3,
         )
         merged_corpus = _merge_unique_corpus(context["corpus"], ingested_corpus)
-        sim_result = run_simulation(
+        sim_result = run_simulation_with_backend(
             seed=seed,
             rounds=rounds,
             corpus=merged_corpus,
             packs=packs,
+            backend=orchestrator_backend,
         )
+        sim_result["orchestrator_backend"] = orchestrator_backend
         sim_result["context_bundle"] = context["bundle"]
         sim_result["context_corpus"] = merged_corpus
         report = build_report_v1(seed, sim_result, packs)
@@ -239,6 +242,7 @@ def run_regression_batch(
             "min_conflict_frame_runs": min_conflict_frame_runs,
             "min_moderation_hook_runs": min_moderation_hook_runs,
             "min_validation_warning_runs": min_validation_warning_runs,
+            "orchestrator_backend": orchestrator_backend,
         },
         "totals": {
             "seed_runs": len(run_summaries),
