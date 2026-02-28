@@ -6,6 +6,22 @@ from project_dream.infra.store import FileRunRepository
 
 def _sample_sim_result() -> dict:
     return {
+        "thread_candidates": [
+            {
+                "candidate_id": "TC-1",
+                "thread_template_id": "T1",
+                "comment_flow_id": "P1",
+                "score": 0.9,
+                "text": "후보 1",
+            }
+        ],
+        "selected_thread": {
+            "candidate_id": "TC-1",
+            "thread_template_id": "T1",
+            "comment_flow_id": "P1",
+            "score": 0.9,
+            "text": "후보 1",
+        },
         "rounds": [{"round": 1, "persona_id": "P1", "text": "t", "community_id": "COM-PLZ-001"}],
         "gate_logs": [{"round": 1, "persona_id": "P1", "gates": [{"gate_name": "safety", "passed": True}]}],
         "action_logs": [{"round": 1, "action_type": "POST_COMMENT"}],
@@ -83,3 +99,22 @@ def test_file_run_repository_persists_context_row_when_present(tmp_path: Path):
     assert rows[0]["type"] == "context"
     assert rows[0]["bundle"]["board_id"] == "B07"
     assert rows[0]["corpus"] == ["ctx-B07-D-1", "ctx-B07-D-2"]
+
+
+def test_file_run_repository_persists_thread_rows_when_present(tmp_path: Path):
+    repo = FileRunRepository(tmp_path / "runs")
+    sim_result = _sample_sim_result()
+    run_dir = repo.persist_run(sim_result, _sample_report())
+
+    rows = [
+        json.loads(line)
+        for line in (run_dir / "runlog.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    row_types = [row.get("type") for row in rows]
+
+    assert "thread_candidate" in row_types
+    assert "thread_selected" in row_types
+
+    selected = next(row for row in rows if row.get("type") == "thread_selected")
+    assert selected["candidate_id"] == "TC-1"

@@ -29,6 +29,32 @@ def test_simulation_uses_pack_context_and_action_logs():
     assert any(row["action_type"] == "REPORT" for row in result["action_logs"])
 
 
+def test_simulation_emits_thread_candidates_and_selection():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    seed = SeedInput(
+        seed_id="SEED-THREAD-001",
+        title="학칙 위반 제보",
+        summary="증거 캡처가 올라오며 논쟁이 시작된다",
+        board_id="B11",
+        zone_id="A",
+    )
+
+    result = run_simulation(seed=seed, rounds=3, corpus=["샘플"], packs=packs)
+
+    candidates = result["thread_candidates"]
+    assert len(candidates) == 3
+    assert all(item["candidate_id"].startswith("TC-") for item in candidates)
+
+    selected = result["selected_thread"]
+    assert selected["candidate_id"] in {item["candidate_id"] for item in candidates}
+    assert selected["thread_template_id"].startswith("T")
+    assert selected["comment_flow_id"].startswith("P")
+
+    round_rows = result["rounds"]
+    assert round_rows
+    assert all(row["thread_candidate_id"] == selected["candidate_id"] for row in round_rows)
+
+
 def test_simulation_emits_policy_transition_event_fields():
     packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
     seed = SeedInput(
