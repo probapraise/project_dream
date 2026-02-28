@@ -150,6 +150,26 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
         assert status == 200
         assert reg_list_limited["count"] == 1
         assert len(reg_list_limited["items"]) == 1
+        assert reg_list_limited["total"] >= 2
+        assert reg_list_limited["limit"] == 1
+        assert reg_list_limited["offset"] == 0
+
+        status, reg_list_filtered = _request_json(
+            "GET",
+            f"{base}/regressions?metric_set=v1&pass_fail=true",
+            headers=auth,
+        )
+        assert status == 200
+        assert reg_list_filtered["count"] >= 1
+        assert all(item["metric_set"] == "v1" for item in reg_list_filtered["items"])
+        assert all(item["pass_fail"] is True for item in reg_list_filtered["items"])
+
+        status, reg_list_paged = _request_json("GET", f"{base}/regressions?limit=1&offset=1", headers=auth)
+        assert status == 200
+        assert reg_list_paged["count"] == 1
+        assert reg_list_paged["total"] >= 2
+        assert reg_list_paged["limit"] == 1
+        assert reg_list_paged["offset"] == 1
 
         status, reg_latest = _request_json("GET", f"{base}/regressions/latest", headers=auth)
         assert status == 200

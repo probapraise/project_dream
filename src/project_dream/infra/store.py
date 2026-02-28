@@ -53,7 +53,13 @@ class RunRepository(Protocol):
     def load_regression_summary(self, summary_id: str) -> dict:
         ...
 
-    def list_regression_summaries(self, limit: int | None = None) -> dict:
+    def list_regression_summaries(
+        self,
+        limit: int | None = None,
+        offset: int = 0,
+        metric_set: str | None = None,
+        pass_fail: bool | None = None,
+    ) -> dict:
         ...
 
 
@@ -235,31 +241,53 @@ class FileRunRepository:
         payload.setdefault("summary_path", str(path))
         return payload
 
-    def list_regression_summaries(self, limit: int | None = None) -> dict:
+    def list_regression_summaries(
+        self,
+        limit: int | None = None,
+        offset: int = 0,
+        metric_set: str | None = None,
+        pass_fail: bool | None = None,
+    ) -> dict:
         if limit is not None and limit < 1:
             raise ValueError(f"Invalid limit: {limit}")
+        if offset < 0:
+            raise ValueError(f"Invalid offset: {offset}")
 
         regressions_dir = self.runs_dir / "regressions"
         summary_files = sorted(regressions_dir.glob("regression-*.json"), reverse=True)
-        if limit is not None:
-            summary_files = summary_files[:limit]
 
-        items = []
+        rows: list[dict] = []
         for path in summary_files:
             payload = json.loads(path.read_text(encoding="utf-8"))
             totals = payload.get("totals", {})
-            items.append(
-                {
-                    "summary_id": path.name,
-                    "summary_path": str(path),
-                    "generated_at_utc": payload.get("generated_at_utc"),
-                    "metric_set": payload.get("metric_set"),
-                    "pass_fail": bool(payload.get("pass_fail")),
-                    "seed_runs": int(totals.get("seed_runs", 0)),
-                }
-            )
+            row = {
+                "summary_id": path.name,
+                "summary_path": str(path),
+                "generated_at_utc": payload.get("generated_at_utc"),
+                "metric_set": payload.get("metric_set"),
+                "pass_fail": bool(payload.get("pass_fail")),
+                "seed_runs": int(totals.get("seed_runs", 0)),
+            }
+            rows.append(row)
 
-        return {"count": len(items), "items": items}
+        if metric_set is not None:
+            rows = [row for row in rows if str(row.get("metric_set", "")) == metric_set]
+        if pass_fail is not None:
+            rows = [row for row in rows if bool(row.get("pass_fail")) is bool(pass_fail)]
+
+        total = len(rows)
+        if limit is None:
+            items = rows[offset:]
+        else:
+            items = rows[offset : offset + limit]
+
+        return {
+            "count": len(items),
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "items": items,
+        }
 
 
 class SQLiteRunRepository:
@@ -641,30 +669,58 @@ class SQLiteRunRepository:
             return indexed_payload
         raise FileNotFoundError(f"Regression summary not found: {summary_id}")
 
-    def list_regression_summaries(self, limit: int | None = None) -> dict:
+    def list_regression_summaries(
+        self,
+        limit: int | None = None,
+        offset: int = 0,
+        metric_set: str | None = None,
+        pass_fail: bool | None = None,
+    ) -> dict:
         if limit is not None and limit < 1:
             raise ValueError(f"Invalid limit: {limit}")
+        if offset < 0:
+            raise ValueError(f"Invalid offset: {offset}")
 
         self._sync_regression_indexes_from_files()
+        clauses: list[str] = []
+        params: list[object] = []
+        if metric_set is not None:
+            clauses.append("metric_set = ?")
+            params.append(metric_set)
+        if pass_fail is not None:
+            clauses.append("pass_fail = ?")
+            params.append(int(bool(pass_fail)))
+        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+
         with self._connect() as conn:
+            total_row = conn.execute(
+                f"""
+                SELECT COUNT(*) AS total
+                FROM regression_summaries
+                {where_clause}
+                """,
+                params,
+            ).fetchone()
+            total = int(total_row["total"]) if total_row is not None else 0
+
             if limit is None:
-                rows = conn.execute(
-                    """
-                    SELECT summary_id, summary_path, generated_at_utc, metric_set, pass_fail, seed_runs
-                    FROM regression_summaries
-                    ORDER BY COALESCE(generated_at_utc, indexed_at_utc) DESC, summary_id DESC
-                    """
-                ).fetchall()
+                query = f"""
+                SELECT summary_id, summary_path, generated_at_utc, metric_set, pass_fail, seed_runs
+                FROM regression_summaries
+                {where_clause}
+                ORDER BY COALESCE(generated_at_utc, indexed_at_utc) DESC, summary_id DESC
+                LIMIT -1 OFFSET ?
+                """
+                rows = conn.execute(query, [*params, offset]).fetchall()
             else:
-                rows = conn.execute(
-                    """
-                    SELECT summary_id, summary_path, generated_at_utc, metric_set, pass_fail, seed_runs
-                    FROM regression_summaries
-                    ORDER BY COALESCE(generated_at_utc, indexed_at_utc) DESC, summary_id DESC
-                    LIMIT ?
-                    """,
-                    (limit,),
-                ).fetchall()
+                query = f"""
+                SELECT summary_id, summary_path, generated_at_utc, metric_set, pass_fail, seed_runs
+                FROM regression_summaries
+                {where_clause}
+                ORDER BY COALESCE(generated_at_utc, indexed_at_utc) DESC, summary_id DESC
+                LIMIT ? OFFSET ?
+                """
+                rows = conn.execute(query, [*params, limit, offset]).fetchall()
 
         if rows:
             items = [
@@ -678,18 +734,22 @@ class SQLiteRunRepository:
                 }
                 for row in rows
             ]
-            return {"count": len(items), "items": items}
+            return {
+                "count": len(items),
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "items": items,
+            }
 
         regressions_dir = self.runs_dir / "regressions"
         summary_files = sorted(regressions_dir.glob("regression-*.json"), reverse=True)
-        if limit is not None:
-            summary_files = summary_files[:limit]
 
-        items = []
+        all_items: list[dict] = []
         for path in summary_files:
             payload = json.loads(path.read_text(encoding="utf-8"))
             totals = payload.get("totals", {})
-            items.append(
+            all_items.append(
                 {
                     "summary_id": path.name,
                     "summary_path": str(path),
@@ -700,4 +760,20 @@ class SQLiteRunRepository:
                 }
             )
 
-        return {"count": len(items), "items": items}
+        if metric_set is not None:
+            all_items = [item for item in all_items if str(item.get("metric_set", "")) == metric_set]
+        if pass_fail is not None:
+            all_items = [item for item in all_items if bool(item.get("pass_fail")) is bool(pass_fail)]
+
+        total = len(all_items)
+        if limit is None:
+            items = all_items[offset:]
+        else:
+            items = all_items[offset : offset + limit]
+        return {
+            "count": len(items),
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "items": items,
+        }

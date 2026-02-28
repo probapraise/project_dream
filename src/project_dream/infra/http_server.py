@@ -109,8 +109,29 @@ def create_server(
 
                 if path == "/regressions":
                     limit_raw = query.get("limit", [None])[0]
+                    offset_raw = query.get("offset", [None])[0]
+                    metric_set = query.get("metric_set", [None])[0] or None
+                    pass_fail_raw = query.get("pass_fail", [None])[0]
                     limit = None if limit_raw in (None, "") else int(limit_raw)
-                    self._send(200, api.list_regression_summaries(limit=limit))
+                    offset = 0 if offset_raw in (None, "") else int(offset_raw)
+                    pass_fail: bool | None = None
+                    if pass_fail_raw not in (None, ""):
+                        normalized = str(pass_fail_raw).strip().lower()
+                        if normalized in {"1", "true", "yes"}:
+                            pass_fail = True
+                        elif normalized in {"0", "false", "no"}:
+                            pass_fail = False
+                        else:
+                            raise ValueError(f"Invalid pass_fail: {pass_fail_raw}")
+                    self._send(
+                        200,
+                        api.list_regression_summaries(
+                            limit=limit,
+                            offset=offset,
+                            metric_set=metric_set,
+                            pass_fail=pass_fail,
+                        ),
+                    )
                     return
 
                 if path == "/regressions/latest":
