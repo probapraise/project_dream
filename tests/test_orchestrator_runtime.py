@@ -215,3 +215,29 @@ def test_runtime_manual_and_langgraph_are_equivalent_except_backend(monkeypatch:
     assert langgraph["graph_node_trace"]["backend"] == "langgraph"
     assert manual["graph_node_trace"]["execution_mode"] == "manual"
     assert langgraph["graph_node_trace"]["execution_mode"] == "stategraph"
+
+
+def test_runtime_uses_shared_stage_assembler(monkeypatch: pytest.MonkeyPatch):
+    import project_dream.orchestrator_runtime as runtime
+
+    marker: dict = {"called": False}
+    original_assemble = runtime.assemble_sim_result_from_stage_payloads
+
+    def wrapped_assemble(stage_payloads: dict[str, dict]) -> dict:
+        marker["called"] = True
+        result = original_assemble(stage_payloads)
+        result["shared_assemble_marker"] = True
+        return result
+
+    monkeypatch.setattr(runtime, "run_simulation", lambda **kwargs: _fake_sim_result())
+    monkeypatch.setattr(runtime, "assemble_sim_result_from_stage_payloads", wrapped_assemble)
+
+    payload = runtime.run_simulation_with_backend(
+        seed=_seed(),
+        rounds=3,
+        corpus=["ctx-1"],
+        backend="manual",
+    )
+
+    assert marker["called"] is True
+    assert payload["shared_assemble_marker"] is True

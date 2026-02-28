@@ -1,15 +1,14 @@
 import importlib
 
-from project_dream.sim_orchestrator import run_simulation
+from project_dream.sim_orchestrator import (
+    SIMULATION_STAGE_NODE_ORDER,
+    assemble_sim_result_from_stage_payloads,
+    extract_stage_payloads,
+    run_simulation,
+)
 
 
 _SUPPORTED_ORCHESTRATOR_BACKENDS = {"manual", "langgraph"}
-_LANGGRAPH_STAGE_NODES = (
-    "thread_candidate",
-    "round_loop",
-    "moderation",
-    "end_condition",
-)
 
 
 def _normalize_backend(backend: str) -> str:
@@ -47,56 +46,37 @@ def _load_langgraph_primitives() -> tuple[type, object, object]:
     return graph_module.StateGraph, graph_module.START, graph_module.END
 
 
-def _build_stage_payloads(sim_result: dict) -> dict[str, dict]:
-    return {
-        "thread_candidate": {
-            "thread_candidates": list(sim_result.get("thread_candidates", [])),
-            "selected_thread": sim_result.get("selected_thread"),
-        },
-        "round_loop": {
-            "rounds": list(sim_result.get("rounds", [])),
-            "gate_logs": list(sim_result.get("gate_logs", [])),
-            "action_logs": list(sim_result.get("action_logs", [])),
-            "persona_memory": dict(sim_result.get("persona_memory", {})),
-        },
-        "moderation": {
-            "round_summaries": list(sim_result.get("round_summaries", [])),
-            "moderation_decisions": list(sim_result.get("moderation_decisions", [])),
-        },
-        "end_condition": {
-            "end_condition": sim_result.get("end_condition"),
-            "thread_state": sim_result.get("thread_state"),
-        },
-    }
-
-
-def _run_langgraph_stage_pipeline(sim_result: dict) -> list[str]:
+def _run_langgraph_stage_pipeline(stage_payloads: dict[str, dict]) -> tuple[list[str], dict[str, dict]]:
     StateGraph, START, END = _load_langgraph_primitives()
-    payloads = _build_stage_payloads(sim_result)
 
     graph = StateGraph(dict)
 
-    for node_id in _LANGGRAPH_STAGE_NODES:
-        stage_payload = payloads[node_id]
+    for node_id in SIMULATION_STAGE_NODE_ORDER:
+        stage_payload = stage_payloads[node_id]
 
         def _node(state: dict, *, _node_id: str = node_id, _stage_payload: dict = stage_payload) -> dict:
             executed = list(state.get("executed_nodes", []))
             executed.append(_node_id)
             return {
                 "executed_nodes": executed,
-                **_stage_payload,
+                _node_id: dict(_stage_payload),
             }
 
         graph.add_node(node_id, _node)
 
-    graph.add_edge(START, _LANGGRAPH_STAGE_NODES[0])
-    for src, dst in zip(_LANGGRAPH_STAGE_NODES, _LANGGRAPH_STAGE_NODES[1:]):
+    graph.add_edge(START, SIMULATION_STAGE_NODE_ORDER[0])
+    for src, dst in zip(SIMULATION_STAGE_NODE_ORDER, SIMULATION_STAGE_NODE_ORDER[1:]):
         graph.add_edge(src, dst)
-    graph.add_edge(_LANGGRAPH_STAGE_NODES[-1], END)
+    graph.add_edge(SIMULATION_STAGE_NODE_ORDER[-1], END)
 
     compiled = graph.compile()
     final_state = compiled.invoke({"executed_nodes": []})
-    return list(final_state.get("executed_nodes", []))
+    executed_nodes = list(final_state.get("executed_nodes", []))
+    resolved_payloads: dict[str, dict] = {}
+    for node_id in SIMULATION_STAGE_NODE_ORDER:
+        node_payload = final_state.get(node_id, stage_payloads[node_id])
+        resolved_payloads[node_id] = dict(node_payload) if isinstance(node_payload, dict) else {}
+    return executed_nodes, resolved_payloads
 
 
 def _graph_node_trace_template(
@@ -117,7 +97,7 @@ def _graph_node_trace_template(
         "schema_version": "graph_node_trace.v1",
         "backend": backend,
         "execution_mode": execution_mode,
-        "node_order": list(_LANGGRAPH_STAGE_NODES),
+        "node_order": list(SIMULATION_STAGE_NODE_ORDER),
         "executed_nodes": list(executed_nodes or []),
         "nodes": [
             {
@@ -154,21 +134,28 @@ def run_simulation_with_backend(
     backend: str = "manual",
 ) -> dict:
     selected = _normalize_backend(backend)
-    sim_result = run_simulation(
+    raw_result = run_simulation(
         seed=seed,
         rounds=rounds,
         corpus=corpus,
         max_retries=max_retries,
         packs=packs,
     )
+    stage_payloads = extract_stage_payloads(raw_result)
 
     if selected == "langgraph":
         _ensure_langgraph_available()
-        executed_nodes = _run_langgraph_stage_pipeline(sim_result)
+        executed_nodes, resolved_payloads = _run_langgraph_stage_pipeline(stage_payloads)
         execution_mode = "stategraph"
     else:
-        executed_nodes = list(_LANGGRAPH_STAGE_NODES)
+        resolved_payloads = stage_payloads
+        executed_nodes = list(SIMULATION_STAGE_NODE_ORDER)
         execution_mode = "manual"
+
+    sim_result = assemble_sim_result_from_stage_payloads(resolved_payloads)
+    for key, value in raw_result.items():
+        if key not in sim_result:
+            sim_result[key] = value
 
     sim_result["graph_node_trace"] = _graph_node_trace_template(
         sim_result,

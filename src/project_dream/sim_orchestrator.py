@@ -4,6 +4,13 @@ from project_dream.gate_pipeline import run_gates
 from project_dream.persona_service import render_voice, select_participants
 from project_dream.prompt_templates import render_prompt
 
+SIMULATION_STAGE_NODE_ORDER = (
+    "thread_candidate",
+    "round_loop",
+    "moderation",
+    "end_condition",
+)
+
 
 def _select_community_id(seed, packs) -> str:
     if not packs:
@@ -261,6 +268,55 @@ def _collect_flow_escalation_events(
     return events
 
 
+def extract_stage_payloads(sim_result: dict) -> dict[str, dict]:
+    persona_memory = sim_result.get("persona_memory", {})
+    if isinstance(persona_memory, dict):
+        persona_memory_copy = {str(k): list(v) for k, v in persona_memory.items() if isinstance(v, list)}
+    else:
+        persona_memory_copy = {}
+
+    return {
+        "thread_candidate": {
+            "thread_candidates": list(sim_result.get("thread_candidates", [])),
+            "selected_thread": sim_result.get("selected_thread"),
+        },
+        "round_loop": {
+            "rounds": list(sim_result.get("rounds", [])),
+            "gate_logs": list(sim_result.get("gate_logs", [])),
+            "action_logs": list(sim_result.get("action_logs", [])),
+            "persona_memory": persona_memory_copy,
+        },
+        "moderation": {
+            "round_summaries": list(sim_result.get("round_summaries", [])),
+            "moderation_decisions": list(sim_result.get("moderation_decisions", [])),
+        },
+        "end_condition": {
+            "end_condition": sim_result.get("end_condition"),
+            "thread_state": sim_result.get("thread_state"),
+        },
+    }
+
+
+def assemble_sim_result_from_stage_payloads(stage_payloads: dict[str, dict]) -> dict:
+    thread_payload = dict(stage_payloads.get("thread_candidate", {}))
+    round_payload = dict(stage_payloads.get("round_loop", {}))
+    moderation_payload = dict(stage_payloads.get("moderation", {}))
+    end_payload = dict(stage_payloads.get("end_condition", {}))
+
+    return {
+        "thread_candidates": list(thread_payload.get("thread_candidates", [])),
+        "selected_thread": thread_payload.get("selected_thread"),
+        "round_summaries": list(moderation_payload.get("round_summaries", [])),
+        "moderation_decisions": list(moderation_payload.get("moderation_decisions", [])),
+        "end_condition": end_payload.get("end_condition"),
+        "rounds": list(round_payload.get("rounds", [])),
+        "gate_logs": list(round_payload.get("gate_logs", [])),
+        "action_logs": list(round_payload.get("action_logs", [])),
+        "persona_memory": dict(round_payload.get("persona_memory", {})),
+        "thread_state": end_payload.get("thread_state"),
+    }
+
+
 def run_simulation(
     seed,
     rounds: int,
@@ -512,29 +568,39 @@ def run_simulation(
     }
     round_summaries = _build_round_summaries(round_logs, action_logs)
 
-    return {
-        "thread_candidates": thread_candidates,
-        "selected_thread": selected_thread,
-        "round_summaries": round_summaries,
-        "moderation_decisions": moderation_decisions,
-        "end_condition": end_condition,
-        "rounds": round_logs,
-        "gate_logs": gate_logs,
-        "action_logs": action_logs,
-        "persona_memory": persona_memory,
-        "thread_state": {
-            "board_id": seed.board_id,
-            "community_id": community_id,
-            "thread_template_id": template_id,
-            "comment_flow_id": flow_id,
-            "title_pattern": selected_title_pattern,
-            "trigger_tags": selected_trigger_tags,
-            "body_sections": selected_body_sections,
-            "status": status,
-            "sanction_level": sanction_level,
-            "total_reports": total_reports,
-            "termination_reason": termination_reason,
-            "ended_round": last_processed_round,
-            "ended_early": ended_early,
+    thread_state = {
+        "board_id": seed.board_id,
+        "community_id": community_id,
+        "thread_template_id": template_id,
+        "comment_flow_id": flow_id,
+        "title_pattern": selected_title_pattern,
+        "trigger_tags": selected_trigger_tags,
+        "body_sections": selected_body_sections,
+        "status": status,
+        "sanction_level": sanction_level,
+        "total_reports": total_reports,
+        "termination_reason": termination_reason,
+        "ended_round": last_processed_round,
+        "ended_early": ended_early,
+    }
+    stage_payloads = {
+        "thread_candidate": {
+            "thread_candidates": thread_candidates,
+            "selected_thread": selected_thread,
+        },
+        "round_loop": {
+            "rounds": round_logs,
+            "gate_logs": gate_logs,
+            "action_logs": action_logs,
+            "persona_memory": persona_memory,
+        },
+        "moderation": {
+            "round_summaries": round_summaries,
+            "moderation_decisions": moderation_decisions,
+        },
+        "end_condition": {
+            "end_condition": end_condition,
+            "thread_state": thread_state,
         },
     }
+    return assemble_sim_result_from_stage_payloads(stage_payloads)
