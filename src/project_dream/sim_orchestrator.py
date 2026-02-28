@@ -2,6 +2,7 @@ from project_dream.env_engine import apply_policy_transition, compute_score
 from project_dream.gen_engine import generate_comment
 from project_dream.gate_pipeline import run_gates
 from project_dream.persona_service import render_voice, select_participants
+from project_dream.prompt_templates import render_prompt
 
 
 def _select_community_id(seed, packs) -> str:
@@ -43,6 +44,53 @@ def _sanitize_for_memory(text: str) -> str:
     return base.strip()
 
 
+def _build_thread_candidates(
+    seed,
+    *,
+    community_id: str,
+    template_id: str,
+    flow_id: str,
+    count: int = 3,
+) -> list[dict]:
+    frames = ("fact", "conflict", "rumor")
+    candidates: list[dict] = []
+    for idx in range(count):
+        frame = frames[idx % len(frames)]
+        prompt = render_prompt(
+            "thread_generation",
+            {
+                "board_id": seed.board_id,
+                "zone_id": seed.zone_id,
+                "title": seed.title,
+                "summary": seed.summary,
+            },
+        )
+        candidates.append(
+            {
+                "candidate_id": f"TC-{idx + 1}",
+                "community_id": community_id,
+                "thread_template_id": template_id,
+                "comment_flow_id": flow_id,
+                "frame": frame,
+                "score": round(1.0 - (idx * 0.1), 2),
+                "text": f"{prompt} | frame={frame}",
+            }
+        )
+    return candidates
+
+
+def _select_thread_candidate(candidates: list[dict]) -> dict:
+    if not candidates:
+        return {
+            "candidate_id": "TC-0",
+            "thread_template_id": "T1",
+            "comment_flow_id": "P1",
+            "score": 0.0,
+            "text": "no-thread-candidate",
+        }
+    return max(candidates, key=lambda item: float(item.get("score", 0.0)))
+
+
 def run_simulation(
     seed,
     rounds: int,
@@ -56,6 +104,14 @@ def run_simulation(
     persona_memory: dict[str, list[str]] = {}
     community_id = _select_community_id(seed, packs)
     template_id, flow_id = _select_template(seed, packs)
+    thread_candidates = _build_thread_candidates(
+        seed,
+        community_id=community_id,
+        template_id=template_id,
+        flow_id=flow_id,
+        count=3,
+    )
+    selected_thread = _select_thread_candidate(thread_candidates)
 
     status = "visible"
     total_reports = 0
@@ -123,6 +179,7 @@ def run_simulation(
                     "community_id": community_id,
                     "thread_template_id": template_id,
                     "comment_flow_id": flow_id,
+                    "thread_candidate_id": selected_thread.get("candidate_id", "TC-0"),
                     "status": status,
                     "score": score,
                     "text": last["final_text"],
@@ -167,6 +224,8 @@ def run_simulation(
                 )
 
     return {
+        "thread_candidates": thread_candidates,
+        "selected_thread": selected_thread,
         "rounds": round_logs,
         "gate_logs": gate_logs,
         "action_logs": action_logs,
