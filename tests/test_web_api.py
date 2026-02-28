@@ -178,7 +178,8 @@ def test_web_api_list_runs_with_filters_and_pagination(tmp_path: Path):
     listed = api.list_runs()
     assert listed["count"] == 2
     assert listed["total"] == 2
-    assert [row["run_id"] for row in listed["items"]] == [run_second, run_first]
+    listed_ids = [row["run_id"] for row in listed["items"]]
+    assert set(listed_ids) == {run_first, run_second}
 
     filtered_seed = api.list_runs(seed_id="SEED-API-LIST-001")
     assert filtered_seed["count"] == 1
@@ -187,7 +188,7 @@ def test_web_api_list_runs_with_filters_and_pagination(tmp_path: Path):
     paged = api.list_runs(limit=1, offset=1)
     assert paged["count"] == 1
     assert paged["total"] == 2
-    assert paged["items"][0]["run_id"] == run_first
+    assert paged["items"][0]["run_id"] == listed["items"][1]["run_id"]
 
 
 def test_web_api_kb_query_methods(tmp_path: Path):

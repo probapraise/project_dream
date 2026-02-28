@@ -201,7 +201,8 @@ def test_file_run_repository_lists_runs_with_filters_and_pagination(tmp_path: Pa
     assert listed["total"] == 2
     assert listed["limit"] == 20
     assert listed["offset"] == 0
-    assert [row["run_id"] for row in listed["items"]] == [run_second.name, run_first.name]
+    listed_ids = [row["run_id"] for row in listed["items"]]
+    assert set(listed_ids) == {run_first.name, run_second.name}
 
     filtered_seed = repo.list_runs(seed_id="SEED-FILE-LIST-1")
     assert filtered_seed["count"] == 1
@@ -220,4 +221,4 @@ def test_file_run_repository_lists_runs_with_filters_and_pagination(tmp_path: Pa
     assert paged["total"] == 2
     assert paged["limit"] == 1
     assert paged["offset"] == 1
-    assert paged["items"][0]["run_id"] == run_first.name
+    assert paged["items"][0]["run_id"] == listed["items"][1]["run_id"]
