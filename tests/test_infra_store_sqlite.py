@@ -51,6 +51,16 @@ def _sample_sim_result() -> dict:
             "ended_early": False,
             "status": "visible",
         },
+        "graph_node_trace": {
+            "schema_version": "graph_node_trace.v1",
+            "backend": "manual",
+            "nodes": [
+                {"node_id": "thread_candidate", "event_type": "thread_candidate", "event_count": 1},
+                {"node_id": "round_loop", "event_type": "round_summary", "event_count": 1},
+                {"node_id": "moderation", "event_type": "moderation_decision", "event_count": 1},
+                {"node_id": "end_condition", "event_type": "end_condition", "event_count": 1},
+            ],
+        },
     }
 
 
@@ -87,6 +97,8 @@ def test_sqlite_run_repository_persists_and_reads_run_artifacts(tmp_path: Path):
     assert report["schema_version"] == "report.v1"
     assert runlog["run_id"] == run_dir.name
     assert runlog["rows"]
+    graph_nodes = [row for row in runlog["rows"] if row.get("type") == "graph_node"]
+    assert len(graph_nodes) == 4
 
 
 def test_sqlite_run_repository_updates_eval_and_latest_lookup(tmp_path: Path):

@@ -51,6 +51,16 @@ def _sample_sim_result() -> dict:
             "ended_early": False,
             "status": "visible",
         },
+        "graph_node_trace": {
+            "schema_version": "graph_node_trace.v1",
+            "backend": "manual",
+            "nodes": [
+                {"node_id": "thread_candidate", "event_type": "thread_candidate", "event_count": 1},
+                {"node_id": "round_loop", "event_type": "round_summary", "event_count": 1},
+                {"node_id": "moderation", "event_type": "moderation_decision", "event_count": 1},
+                {"node_id": "end_condition", "event_type": "end_condition", "event_count": 1},
+            ],
+        },
     }
 
 
@@ -155,3 +165,12 @@ def test_file_run_repository_persists_thread_rows_when_present(tmp_path: Path):
 
     end_condition = next(row for row in rows if row.get("type") == "end_condition")
     assert end_condition["termination_reason"] == "round_limit"
+
+    graph_nodes = [row for row in rows if row.get("type") == "graph_node"]
+    assert len(graph_nodes) == 4
+    assert [row["node_id"] for row in graph_nodes] == [
+        "thread_candidate",
+        "round_loop",
+        "moderation",
+        "end_condition",
+    ]

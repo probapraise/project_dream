@@ -97,6 +97,28 @@ def persist_run(output_dir: Path, sim_result: dict, report: dict) -> Path:
         if end_condition is not None:
             fp.write(json.dumps({"type": "end_condition", **end_condition}, ensure_ascii=False) + "\n")
 
+        graph_node_trace = sim_result.get("graph_node_trace")
+        if isinstance(graph_node_trace, dict):
+            trace_schema_version = str(graph_node_trace.get("schema_version", "graph_node_trace.v1"))
+            trace_backend = str(graph_node_trace.get("backend", "manual"))
+            nodes = graph_node_trace.get("nodes", [])
+            if isinstance(nodes, list):
+                for row in nodes:
+                    if not isinstance(row, dict):
+                        continue
+                    fp.write(
+                        json.dumps(
+                            {
+                                "type": "graph_node",
+                                "schema_version": trace_schema_version,
+                                "backend": trace_backend,
+                                **row,
+                            },
+                            ensure_ascii=False,
+                        )
+                        + "\n"
+                    )
+
     (run_dir / "report.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
     )
