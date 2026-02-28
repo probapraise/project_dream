@@ -278,15 +278,20 @@ def test_web_api_kb_query_uses_ingested_corpus(tmp_path: Path):
 
 def test_web_api_for_local_filesystem_supports_sqlite_backend(tmp_path: Path):
     db_path = tmp_path / "custom-runs.sqlite3"
+    vector_db_path = tmp_path / "custom-vectors.sqlite3"
     api = ProjectDreamAPI.for_local_filesystem(
         runs_dir=tmp_path / "runs",
         packs_dir=Path("packs"),
         repository_backend="sqlite",
         sqlite_db_path=db_path,
+        vector_backend="sqlite",
+        vector_db_path=vector_db_path,
     )
 
     assert isinstance(api.repository, SQLiteRunRepository)
     assert api.repository.db_path == db_path
+    assert api.vector_backend == "sqlite"
+    assert api.vector_db_path == vector_db_path
 
 
 def test_web_api_for_local_filesystem_rejects_unknown_backend(tmp_path: Path):
@@ -295,6 +300,15 @@ def test_web_api_for_local_filesystem_rejects_unknown_backend(tmp_path: Path):
             runs_dir=tmp_path / "runs",
             packs_dir=Path("packs"),
             repository_backend="unknown",
+        )
+
+
+def test_web_api_for_local_filesystem_rejects_unknown_vector_backend(tmp_path: Path):
+    with pytest.raises(ValueError):
+        ProjectDreamAPI.for_local_filesystem(
+            runs_dir=tmp_path / "runs",
+            packs_dir=Path("packs"),
+            vector_backend="unknown",
         )
 
 

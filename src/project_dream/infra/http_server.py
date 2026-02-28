@@ -191,10 +191,13 @@ def create_server(
                 if path == "/simulate":
                     seed_payload = body.get("seed", {})
                     rounds = int(body.get("rounds", 3))
+                    vector_db_path_raw = body.get("vector_db_path")
                     payload = api.simulate(
                         seed_payload=seed_payload,
                         rounds=rounds,
                         orchestrator_backend=body.get("orchestrator_backend", "manual"),
+                        vector_backend=body.get("vector_backend"),
+                        vector_db_path=Path(vector_db_path_raw) if vector_db_path_raw else None,
                     )
                     self._send(200, payload)
                     return
@@ -208,6 +211,7 @@ def create_server(
                     return
 
                 if path == "/regress":
+                    vector_db_path_raw = body.get("vector_db_path")
                     payload = api.regress(
                         seeds_dir=Path(body.get("seeds_dir", "examples/seeds/regression")),
                         rounds=int(body.get("rounds", 4)),
@@ -218,6 +222,8 @@ def create_server(
                         min_moderation_hook_runs=int(body.get("min_moderation_hook_runs", 1)),
                         min_validation_warning_runs=int(body.get("min_validation_warning_runs", 1)),
                         orchestrator_backend=body.get("orchestrator_backend", "manual"),
+                        vector_backend=body.get("vector_backend"),
+                        vector_db_path=Path(vector_db_path_raw) if vector_db_path_raw else None,
                     )
                     self._send(200, payload)
                     return

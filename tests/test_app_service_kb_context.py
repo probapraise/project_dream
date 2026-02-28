@@ -214,3 +214,73 @@ def test_simulate_and_persist_forwards_orchestrator_backend(
     )
 
     assert captured["backend"] == "langgraph"
+
+
+def test_simulate_and_persist_forwards_vector_backend_to_build_index(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    captured: dict = {}
+
+    def fake_build_index(packs, corpus_dir=None, *, vector_backend="memory", vector_db_path=None):
+        captured["vector_backend"] = vector_backend
+        captured["vector_db_path"] = vector_db_path
+        return {"fake": "index"}
+
+    def fake_run_simulation_with_backend(
+        *,
+        seed,
+        rounds,
+        corpus,
+        max_retries=2,
+        packs=None,
+        backend="manual",
+    ):
+        return {
+            "rounds": [],
+            "gate_logs": [],
+            "action_logs": [],
+            "thread_state": {
+                "board_id": seed.board_id,
+                "community_id": "COM-PLZ-004",
+                "thread_template_id": "T1",
+                "comment_flow_id": "P1",
+                "status": "visible",
+                "total_reports": 0,
+            },
+        }
+
+    monkeypatch.setattr(app_service, "build_index", fake_build_index, raising=False)
+    monkeypatch.setattr(
+        app_service,
+        "retrieve_context",
+        lambda index, **kwargs: {"bundle": {}, "corpus": ["ctx-B07-D"]},
+        raising=False,
+    )
+    monkeypatch.setattr(app_service, "run_simulation_with_backend", fake_run_simulation_with_backend, raising=False)
+    monkeypatch.setattr(
+        app_service,
+        "build_report_v1",
+        lambda seed, sim_result, packs: {"schema_version": "report.v1", "seed_id": seed.seed_id},
+    )
+
+    seed = SeedInput(
+        seed_id="SEED-KB-004",
+        title="장터 분쟁",
+        summary="거래 사기 의혹이 확산되는 사건",
+        board_id="B07",
+        zone_id="D",
+    )
+    repo = _FakeRepository(tmp_path / "runs")
+    vector_db_path = tmp_path / "vectors.sqlite3"
+
+    app_service.simulate_and_persist(
+        seed=seed,
+        rounds=3,
+        packs_dir=Path("packs"),
+        repository=repo,
+        vector_backend="sqlite",
+        vector_db_path=vector_db_path,
+    )
+
+    assert captured["vector_backend"] == "sqlite"
+    assert captured["vector_db_path"] == vector_db_path

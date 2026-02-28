@@ -32,9 +32,15 @@ def simulate_and_persist(
     repository: RunRepository,
     corpus_dir: Path = Path("corpus"),
     orchestrator_backend: str = "manual",
+    vector_backend: str = "memory",
+    vector_db_path: Path | None = None,
 ) -> Path:
     packs = load_packs(packs_dir, enforce_phase1_minimums=True)
-    index = build_index(packs)
+    index = build_index(
+        packs,
+        vector_backend=vector_backend,
+        vector_db_path=vector_db_path,
+    )
     context = retrieve_context(
         index,
         task=f"{seed.title} {seed.summary}",
@@ -86,6 +92,8 @@ def regress_and_persist(
     min_moderation_hook_runs: int = 1,
     min_validation_warning_runs: int = 1,
     orchestrator_backend: str = "manual",
+    vector_backend: str = "memory",
+    vector_db_path: Path | None = None,
 ) -> dict:
     summary = run_regression_batch(
         seeds_dir=seeds_dir,
@@ -100,6 +108,8 @@ def regress_and_persist(
         min_moderation_hook_runs=min_moderation_hook_runs,
         min_validation_warning_runs=min_validation_warning_runs,
         orchestrator_backend=orchestrator_backend,
+        vector_backend=vector_backend,
+        vector_db_path=vector_db_path,
     )
     repository.persist_regression_summary(summary)
     return summary
