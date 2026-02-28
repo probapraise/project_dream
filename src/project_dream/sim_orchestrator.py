@@ -1,5 +1,5 @@
 from project_dream.env_engine import apply_policy_transition, compute_score
-from project_dream.gen_engine import generate_comment
+from project_dream.gen_engine import generate_comment, pop_last_generation_trace, reset_last_generation_trace
 from project_dream.gate_pipeline import run_gates
 from project_dream.persona_service import render_voice, select_participants
 from project_dream.prompt_templates import render_prompt
@@ -172,12 +172,30 @@ def run_simulation(
             before_entries = persona_memory.get(persona_id, [])
             memory_before = _memory_summary(before_entries)
             voice_constraints = render_voice(persona_id, seed.zone_id, packs=packs)
+            reset_last_generation_trace()
             text = generate_comment(
                 seed,
                 persona_id,
                 round_idx=round_idx,
                 memory_hint=memory_before,
                 voice_constraints=voice_constraints,
+            )
+            generation_trace = pop_last_generation_trace() or {}
+            stage1_trace = generation_trace.get(
+                "stage1",
+                {
+                    "claim": "",
+                    "evidence": "",
+                    "intent": "",
+                    "dial": "",
+                },
+            )
+            stage2_trace = generation_trace.get(
+                "stage2",
+                {
+                    "voice_hint": "",
+                    "prompt": "",
+                },
             )
             last = None
             total_failed_in_attempts = 0
@@ -240,6 +258,8 @@ def run_simulation(
                     "account_type": account_type,
                     "sort_tab": sort_tab,
                     "sanction_level": sanction_level,
+                    "generation_stage1": stage1_trace,
+                    "generation_stage2": stage2_trace,
                     "text": last["final_text"],
                     "memory_before": memory_before,
                     "memory_after": memory_after,

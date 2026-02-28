@@ -159,3 +159,29 @@ def test_simulation_emits_policy_transition_event_fields():
     assert first["prev_status"] in {"visible", "hidden", "locked", "ghost"}
     assert first["next_status"] in {"hidden", "locked", "ghost", "sanctioned"}
     assert first["reason_rule_id"].startswith("RULE-PLZ-")
+
+
+def test_simulation_emits_generation_stage_trace_fields():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    seed = SeedInput(
+        seed_id="SEED-GEN-STAGE-001",
+        title="생성 단계 추적",
+        summary="2단계 생성 엔진의 산출물을 로그에 남긴다",
+        board_id="B07",
+        zone_id="D",
+    )
+
+    result = run_simulation(seed=seed, rounds=2, corpus=["샘플"], packs=packs)
+
+    assert result["rounds"]
+    first = result["rounds"][0]
+    assert "generation_stage1" in first
+    assert "generation_stage2" in first
+
+    stage1 = first["generation_stage1"]
+    stage2 = first["generation_stage2"]
+    assert isinstance(stage1, dict)
+    assert isinstance(stage2, dict)
+    assert {"claim", "evidence", "intent"} <= set(stage1.keys())
+    assert "dial" in stage1
+    assert "voice_hint" in stage2
