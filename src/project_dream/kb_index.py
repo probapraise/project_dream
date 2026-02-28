@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import math
 import re
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -121,6 +123,9 @@ def _score_components(
     df: dict[str, int],
     doc_count: int,
     avg_doc_len: float,
+    query_dense_vector: dict[str, float],
+    vector_backend: str = "memory",
+    sqlite_dense_cache: dict[str, dict[str, float]] | None = None,
 ) -> tuple[float, float, float]:
     query_tokens = _tokenize(query)
     sparse = _bm25_score(
@@ -131,14 +136,79 @@ def _score_components(
         doc_count=doc_count,
         avg_doc_len=avg_doc_len,
     )
-    dense = _cosine_similarity(_char_ngrams(query, n=2), row.get("_dense_vector", {}))
+    dense_vector = row.get("_dense_vector", {})
+    if vector_backend == "sqlite" and sqlite_dense_cache is not None:
+        dense_vector = sqlite_dense_cache.get(_vector_row_key(row), {})
+    dense = _cosine_similarity(query_dense_vector, dense_vector)
     phrase_bonus = 0.15 if _normalize_dense_text(query) in str(row.get("_normalized_text", "")) else 0.0
     sparse_norm = 1.0 - math.exp(-max(0.0, sparse))
     hybrid = (0.65 * sparse_norm) + (0.35 * dense) + phrase_bonus
     return sparse, dense, hybrid
 
 
-def build_index(packs: LoadedPacks, corpus_dir: Path | None = None) -> dict[str, Any]:
+def _resolve_vector_backend(backend: str) -> str:
+    name = str(backend).strip().lower()
+    if name not in {"memory", "sqlite"}:
+        raise ValueError(f"Unknown vector backend: {backend}")
+    return name
+
+
+def _vector_row_key(row: dict) -> str:
+    return f"{row.get('kind', '')}:{row.get('item_id', '')}"
+
+
+def _build_sqlite_dense_cache(passages: list[dict], db_path: Path) -> dict[str, dict[str, float]]:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS dense_vectors (
+                item_key TEXT PRIMARY KEY,
+                vector_json TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute("DELETE FROM dense_vectors")
+        rows: list[tuple[str, str]] = []
+        for row in passages:
+            dense_vector = row.get("_dense_vector", {})
+            if not isinstance(dense_vector, dict):
+                dense_vector = {}
+            rows.append((_vector_row_key(row), json.dumps(dense_vector, ensure_ascii=False)))
+        if rows:
+            conn.executemany(
+                "INSERT INTO dense_vectors (item_key, vector_json) VALUES (?, ?)",
+                rows,
+            )
+        conn.commit()
+
+        loaded_rows = conn.execute(
+            "SELECT item_key, vector_json FROM dense_vectors"
+        ).fetchall()
+
+    dense_cache: dict[str, dict[str, float]] = {}
+    for item_key, vector_json in loaded_rows:
+        raw = json.loads(str(vector_json))
+        if not isinstance(raw, dict):
+            continue
+        vector: dict[str, float] = {}
+        for key, value in raw.items():
+            try:
+                vector[str(key)] = float(value)
+            except (TypeError, ValueError):
+                continue
+        dense_cache[str(item_key)] = vector
+    return dense_cache
+
+
+def build_index(
+    packs: LoadedPacks,
+    corpus_dir: Path | None = None,
+    *,
+    vector_backend: str = "memory",
+    vector_db_path: Path | None = None,
+) -> dict[str, Any]:
+    resolved_vector_backend = _resolve_vector_backend(vector_backend)
     passages: list[dict] = []
     communities = packs.communities
 
@@ -292,9 +362,18 @@ def build_index(packs: LoadedPacks, corpus_dir: Path | None = None) -> dict[str,
 
     doc_count = len(passages)
     avg_doc_len = (total_doc_len / doc_count) if doc_count > 0 else 0.0
+    sqlite_dense_cache: dict[str, dict[str, float]] | None = None
+    resolved_vector_db_path: str | None = None
+    if resolved_vector_backend == "sqlite":
+        db_path = vector_db_path if vector_db_path is not None else Path(".cache/kb-vectors.sqlite3")
+        sqlite_dense_cache = _build_sqlite_dense_cache(passages, db_path)
+        resolved_vector_db_path = str(db_path)
     return {
         "passages": passages,
         "packs": packs,
+        "vector_backend": resolved_vector_backend,
+        "vector_db_path": resolved_vector_db_path,
+        "_sqlite_dense_cache": sqlite_dense_cache,
         "stats": {
             "df": df,
             "doc_count": doc_count,
@@ -317,6 +396,9 @@ def search(
     df: dict[str, int] = stats.get("df", {})
     doc_count: int = int(stats.get("doc_count", len(passages)))
     avg_doc_len: float = float(stats.get("avg_doc_len", 0.0))
+    vector_backend = _resolve_vector_backend(str(index.get("vector_backend", "memory")))
+    sqlite_dense_cache = index.get("_sqlite_dense_cache")
+    query_dense_vector = _char_ngrams(query, n=2)
     matched = [row for row in passages if _matches_filters(row, filters)]
 
     scored: list[tuple[float, float, float, dict]] = []
@@ -327,6 +409,9 @@ def search(
             df=df,
             doc_count=doc_count,
             avg_doc_len=avg_doc_len,
+            query_dense_vector=query_dense_vector,
+            vector_backend=vector_backend,
+            sqlite_dense_cache=sqlite_dense_cache if isinstance(sqlite_dense_cache, dict) else None,
         )
         scored.append((hybrid, sparse, dense, row))
     scored.sort(key=lambda item: (-item[0], -item[1], -item[2], item[3]["kind"], item[3]["item_id"]))

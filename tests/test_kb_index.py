@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from project_dream.kb_index import build_index, retrieve_context, search
 from project_dream.pack_service import load_packs
 
@@ -133,3 +135,59 @@ def test_search_hybrid_recovers_spacing_variant_with_dense_signal():
     assert results[0]["item_id"] == "B17"
     assert float(results[0]["score_dense"]) > 0.0
     assert float(results[0]["score_hybrid"]) >= float(results[0]["score_sparse"])
+
+
+def test_build_index_supports_sqlite_vector_backend(tmp_path: Path):
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    vector_db_path = tmp_path / "kb-vectors.sqlite3"
+    index = build_index(
+        packs,
+        vector_backend="sqlite",
+        vector_db_path=vector_db_path,
+    )
+
+    results = search(
+        index,
+        query="정렬이 진실",
+        filters={"kind": "board"},
+        top_k=3,
+    )
+
+    assert vector_db_path.exists()
+    assert results
+    assert results[0]["item_id"] == "B17"
+    assert float(results[0]["score_dense"]) > 0.0
+
+
+def test_search_top_result_is_consistent_between_memory_and_sqlite_backend(tmp_path: Path):
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    index_memory = build_index(packs, vector_backend="memory")
+    index_sqlite = build_index(
+        packs,
+        vector_backend="sqlite",
+        vector_db_path=tmp_path / "kb-vectors.sqlite3",
+    )
+
+    memory_results = search(
+        index_memory,
+        query="정렬이 진실",
+        filters={"kind": "board"},
+        top_k=1,
+    )
+    sqlite_results = search(
+        index_sqlite,
+        query="정렬이 진실",
+        filters={"kind": "board"},
+        top_k=1,
+    )
+
+    assert memory_results
+    assert sqlite_results
+    assert memory_results[0]["item_id"] == sqlite_results[0]["item_id"]
+
+
+def test_build_index_rejects_unknown_vector_backend():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+
+    with pytest.raises(ValueError):
+        build_index(packs, vector_backend="unknown")
