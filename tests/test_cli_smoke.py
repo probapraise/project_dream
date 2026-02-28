@@ -19,6 +19,7 @@ def test_cli_supports_regress_live_command_with_defaults():
     assert args.max_seeds == 2
     assert args.metric_set == "v2"
     assert args.llm_model == "gemini-3.1-flash"
+    assert args.baseline_file == "runs/regressions/regress-live-baseline.json"
 
 
 def test_cli_serve_requires_api_token_when_not_set(monkeypatch: pytest.MonkeyPatch):

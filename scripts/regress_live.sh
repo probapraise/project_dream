@@ -24,6 +24,10 @@ MIN_MODERATION_HOOK_RUNS="${PROJECT_DREAM_LIVE_MIN_MODERATION_HOOK_RUNS:-0}"
 MIN_VALIDATION_WARNING_RUNS="${PROJECT_DREAM_LIVE_MIN_VALIDATION_WARNING_RUNS:-0}"
 LLM_MODEL="${PROJECT_DREAM_LIVE_LLM_MODEL:-${PROJECT_DREAM_LLM_MODEL:-gemini-3.1-flash}}"
 LLM_TIMEOUT_SEC="${PROJECT_DREAM_LIVE_LLM_TIMEOUT_SEC:-${PROJECT_DREAM_LLM_TIMEOUT_SEC:-60}}"
+BASELINE_FILE="${PROJECT_DREAM_LIVE_BASELINE_FILE:-runs/regressions/regress-live-baseline.json}"
+ALLOWED_RATE_DROP="${PROJECT_DREAM_LIVE_ALLOWED_RATE_DROP:-0.05}"
+ALLOWED_COMMUNITY_DROP="${PROJECT_DREAM_LIVE_ALLOWED_COMMUNITY_DROP:-1}"
+UPDATE_BASELINE="${PROJECT_DREAM_LIVE_UPDATE_BASELINE:-0}"
 
 if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
   PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
@@ -47,4 +51,8 @@ exec "$PYTHON_BIN" -m project_dream.cli regress-live \
   --min-moderation-hook-runs "$MIN_MODERATION_HOOK_RUNS" \
   --min-validation-warning-runs "$MIN_VALIDATION_WARNING_RUNS" \
   --llm-model "$LLM_MODEL" \
-  --llm-timeout-sec "$LLM_TIMEOUT_SEC"
+  --llm-timeout-sec "$LLM_TIMEOUT_SEC" \
+  --baseline-file "$BASELINE_FILE" \
+  --allowed-rate-drop "$ALLOWED_RATE_DROP" \
+  --allowed-community-drop "$ALLOWED_COMMUNITY_DROP" \
+  $([[ "$UPDATE_BASELINE" == "1" ]] && printf '%s' "--update-baseline")

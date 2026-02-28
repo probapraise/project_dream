@@ -65,6 +65,18 @@ python -m project_dream.cli regress-live
 - `PROJECT_DREAM_LLM_MODEL=gemini-3.1-flash` (기본값, `--llm-model`로 변경 가능)
 
 기본은 `max-seeds=2`, `metric-set=v2`의 소규모 스모크 실행이며, 인자는 `regress`와 동일하게 대부분 커스터마이즈할 수 있습니다.
+또한 baseline 품질 게이트를 기본으로 수행합니다.
+
+```bash
+# 1) 기준선 생성/갱신
+python -m project_dream.cli regress-live --update-baseline
+
+# 2) 이후 실행은 baseline과 자동 비교(기본)
+python -m project_dream.cli regress-live
+```
+
+기본 baseline 경로는 `runs/regressions/regress-live-baseline.json`이며,
+비교 허용치는 `--allowed-rate-drop`(기본 0.05), `--allowed-community-drop`(기본 1)입니다.
 
 ### Server Control
 
