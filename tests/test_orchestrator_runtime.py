@@ -241,3 +241,77 @@ def test_runtime_uses_shared_stage_assembler(monkeypatch: pytest.MonkeyPatch):
 
     assert marker["called"] is True
     assert payload["shared_assemble_marker"] is True
+
+
+def test_runtime_manual_backend_applies_stage_node_helpers(monkeypatch: pytest.MonkeyPatch):
+    import project_dream.orchestrator_runtime as runtime
+
+    monkeypatch.setattr(runtime, "run_simulation", lambda **kwargs: _fake_sim_result())
+
+    def fake_thread_candidate(payload: dict) -> dict:
+        updated = dict(payload)
+        selected = dict(updated.get("selected_thread") or {})
+        selected["stage_helper_marker"] = "manual"
+        updated["selected_thread"] = selected
+        return updated
+
+    def fake_end_condition(payload: dict) -> dict:
+        updated = dict(payload)
+        end_condition = dict(updated.get("end_condition") or {})
+        end_condition["termination_reason"] = "manual-stage-helper"
+        updated["end_condition"] = end_condition
+        return updated
+
+    monkeypatch.setattr(runtime, "_run_stage_node_thread_candidate", fake_thread_candidate)
+    monkeypatch.setattr(runtime, "_run_stage_node_end_condition", fake_end_condition)
+
+    payload = runtime.run_simulation_with_backend(
+        seed=_seed(),
+        rounds=3,
+        corpus=["ctx-1"],
+        backend="manual",
+    )
+
+    assert payload["selected_thread"]["stage_helper_marker"] == "manual"
+    assert payload["end_condition"]["termination_reason"] == "manual-stage-helper"
+
+
+def test_runtime_langgraph_backend_applies_stage_node_helpers(monkeypatch: pytest.MonkeyPatch):
+    import project_dream.orchestrator_runtime as runtime
+
+    def fake_import(name: str):
+        if name == "langgraph":
+            return object()
+        if name == "langgraph.graph":
+            return _fake_langgraph_graph_module()
+        raise ImportError(name)
+
+    monkeypatch.setattr(runtime.importlib, "import_module", fake_import)
+    monkeypatch.setattr(runtime, "run_simulation", lambda **kwargs: _fake_sim_result())
+
+    def fake_thread_candidate(payload: dict) -> dict:
+        updated = dict(payload)
+        selected = dict(updated.get("selected_thread") or {})
+        selected["stage_helper_marker"] = "langgraph"
+        updated["selected_thread"] = selected
+        return updated
+
+    def fake_end_condition(payload: dict) -> dict:
+        updated = dict(payload)
+        end_condition = dict(updated.get("end_condition") or {})
+        end_condition["termination_reason"] = "langgraph-stage-helper"
+        updated["end_condition"] = end_condition
+        return updated
+
+    monkeypatch.setattr(runtime, "_run_stage_node_thread_candidate", fake_thread_candidate)
+    monkeypatch.setattr(runtime, "_run_stage_node_end_condition", fake_end_condition)
+
+    payload = runtime.run_simulation_with_backend(
+        seed=_seed(),
+        rounds=3,
+        corpus=["ctx-1"],
+        backend="langgraph",
+    )
+
+    assert payload["selected_thread"]["stage_helper_marker"] == "langgraph"
+    assert payload["end_condition"]["termination_reason"] == "langgraph-stage-helper"

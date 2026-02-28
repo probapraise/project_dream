@@ -1,4 +1,5 @@
 import importlib
+from typing import Callable
 
 from project_dream.sim_orchestrator import (
     SIMULATION_STAGE_NODE_ORDER,
@@ -9,6 +10,41 @@ from project_dream.sim_orchestrator import (
 
 
 _SUPPORTED_ORCHESTRATOR_BACKENDS = {"manual", "langgraph"}
+
+
+def _coerce_stage_payload(payload: dict | None) -> dict:
+    if not isinstance(payload, dict):
+        return {}
+    return dict(payload)
+
+
+def _run_stage_node_thread_candidate(stage_payload: dict) -> dict:
+    return _coerce_stage_payload(stage_payload)
+
+
+def _run_stage_node_round_loop(stage_payload: dict) -> dict:
+    return _coerce_stage_payload(stage_payload)
+
+
+def _run_stage_node_moderation(stage_payload: dict) -> dict:
+    return _coerce_stage_payload(stage_payload)
+
+
+def _run_stage_node_end_condition(stage_payload: dict) -> dict:
+    return _coerce_stage_payload(stage_payload)
+
+
+def _resolve_stage_node_handler(node_id: str) -> Callable[[dict], dict]:
+    handlers: dict[str, Callable[[dict], dict]] = {
+        "thread_candidate": _run_stage_node_thread_candidate,
+        "round_loop": _run_stage_node_round_loop,
+        "moderation": _run_stage_node_moderation,
+        "end_condition": _run_stage_node_end_condition,
+    }
+    if node_id not in handlers:
+        allowed = ", ".join(sorted(handlers))
+        raise RuntimeError(f"Unknown stage node id: {node_id} (allowed: {allowed})")
+    return handlers[node_id]
 
 
 def _normalize_backend(backend: str) -> str:
@@ -46,20 +82,39 @@ def _load_langgraph_primitives() -> tuple[type, object, object]:
     return graph_module.StateGraph, graph_module.START, graph_module.END
 
 
+def _run_manual_stage_pipeline(stage_payloads: dict[str, dict]) -> tuple[list[str], dict[str, dict]]:
+    executed_nodes: list[str] = []
+    resolved_payloads: dict[str, dict] = {}
+    for node_id in SIMULATION_STAGE_NODE_ORDER:
+        stage_payload = _coerce_stage_payload(stage_payloads.get(node_id))
+        stage_node_handler = _resolve_stage_node_handler(node_id)
+        resolved_payloads[node_id] = _coerce_stage_payload(stage_node_handler(stage_payload))
+        executed_nodes.append(node_id)
+    return executed_nodes, resolved_payloads
+
+
 def _run_langgraph_stage_pipeline(stage_payloads: dict[str, dict]) -> tuple[list[str], dict[str, dict]]:
     StateGraph, START, END = _load_langgraph_primitives()
 
     graph = StateGraph(dict)
 
     for node_id in SIMULATION_STAGE_NODE_ORDER:
-        stage_payload = stage_payloads[node_id]
+        stage_payload = _coerce_stage_payload(stage_payloads.get(node_id))
+        stage_node_handler = _resolve_stage_node_handler(node_id)
 
-        def _node(state: dict, *, _node_id: str = node_id, _stage_payload: dict = stage_payload) -> dict:
+        def _node(
+            state: dict,
+            *,
+            _node_id: str = node_id,
+            _stage_payload: dict = stage_payload,
+            _stage_node_handler: Callable[[dict], dict] = stage_node_handler,
+        ) -> dict:
             executed = list(state.get("executed_nodes", []))
             executed.append(_node_id)
+            resolved_payload = _coerce_stage_payload(_stage_node_handler(_stage_payload))
             return {
                 "executed_nodes": executed,
-                _node_id: dict(_stage_payload),
+                _node_id: resolved_payload,
             }
 
         graph.add_node(node_id, _node)
@@ -74,8 +129,8 @@ def _run_langgraph_stage_pipeline(stage_payloads: dict[str, dict]) -> tuple[list
     executed_nodes = list(final_state.get("executed_nodes", []))
     resolved_payloads: dict[str, dict] = {}
     for node_id in SIMULATION_STAGE_NODE_ORDER:
-        node_payload = final_state.get(node_id, stage_payloads[node_id])
-        resolved_payloads[node_id] = dict(node_payload) if isinstance(node_payload, dict) else {}
+        node_payload = final_state.get(node_id, stage_payloads.get(node_id, {}))
+        resolved_payloads[node_id] = _coerce_stage_payload(node_payload)
     return executed_nodes, resolved_payloads
 
 
@@ -148,8 +203,7 @@ def run_simulation_with_backend(
         executed_nodes, resolved_payloads = _run_langgraph_stage_pipeline(stage_payloads)
         execution_mode = "stategraph"
     else:
-        resolved_payloads = stage_payloads
-        executed_nodes = list(SIMULATION_STAGE_NODE_ORDER)
+        executed_nodes, resolved_payloads = _run_manual_stage_pipeline(stage_payloads)
         execution_mode = "manual"
 
     sim_result = assemble_sim_result_from_stage_payloads(resolved_payloads)
