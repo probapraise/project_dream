@@ -8,9 +8,10 @@ from project_dream.pack_service import load_packs
 
 
 class ProjectDreamAPI:
-    def __init__(self, repository: RunRepository, packs_dir: Path):
+    def __init__(self, repository: RunRepository, packs_dir: Path, corpus_dir: Path = Path("corpus")):
         self.repository = repository
         self.packs_dir = packs_dir
+        self.corpus_dir = corpus_dir
 
     @classmethod
     def for_local_filesystem(
@@ -18,8 +19,9 @@ class ProjectDreamAPI:
         *,
         runs_dir: Path = Path("runs"),
         packs_dir: Path = Path("packs"),
+        corpus_dir: Path = Path("corpus"),
     ) -> "ProjectDreamAPI":
-        return cls(repository=FileRunRepository(runs_dir), packs_dir=packs_dir)
+        return cls(repository=FileRunRepository(runs_dir), packs_dir=packs_dir, corpus_dir=corpus_dir)
 
     def health(self) -> dict:
         return {"status": "ok", "service": "project-dream"}
@@ -30,6 +32,7 @@ class ProjectDreamAPI:
             seed,
             rounds=rounds,
             packs_dir=self.packs_dir,
+            corpus_dir=self.corpus_dir,
             repository=self.repository,
         )
         return {"run_id": run_dir.name, "run_dir": str(run_dir)}
@@ -78,6 +81,7 @@ class ProjectDreamAPI:
         return regress_and_persist(
             repository=self.repository,
             packs_dir=self.packs_dir,
+            corpus_dir=self.corpus_dir,
             seeds_dir=seeds_dir,
             rounds=rounds,
             max_seeds=max_seeds,
@@ -90,7 +94,7 @@ class ProjectDreamAPI:
 
     def _build_kb_index(self) -> dict:
         packs = load_packs(self.packs_dir, enforce_phase1_minimums=True)
-        return build_index(packs)
+        return build_index(packs, corpus_dir=self.corpus_dir)
 
     def search_knowledge(
         self, *, query: str, filters: dict | None = None, top_k: int = 5

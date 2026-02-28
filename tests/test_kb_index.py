@@ -63,3 +63,52 @@ def test_retrieve_context_returns_bundle_and_corpus():
     assert any(row["kind"] == "rule" for row in bundle["sections"]["policy"])
     assert corpus
     assert any("장터기둥" in text or "B07" in text for text in corpus)
+
+
+def test_build_index_includes_ingested_corpus_passages(tmp_path: Path):
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    corpus_dir = tmp_path / "corpus"
+    corpus_dir.mkdir(parents=True, exist_ok=True)
+    (corpus_dir / "reference.jsonl").write_text(
+        '{"board_id":"B07","zone_id":"D","doc_id":"DOC-REF-001","source_type":"reference","text":"INGEST-CTX-B07"}\n',
+        encoding="utf-8",
+    )
+    (corpus_dir / "refined.jsonl").write_text("", encoding="utf-8")
+    (corpus_dir / "generated.jsonl").write_text("", encoding="utf-8")
+
+    index = build_index(packs, corpus_dir=corpus_dir)
+    results = search(
+        index,
+        query="INGEST-CTX-B07",
+        filters={"kind": "corpus", "board_id": "B07"},
+        top_k=3,
+    )
+
+    assert results
+    assert results[0]["kind"] == "corpus"
+    assert results[0]["source_type"] == "reference"
+
+
+def test_retrieve_context_includes_ingested_corpus_when_available(tmp_path: Path):
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    corpus_dir = tmp_path / "corpus"
+    corpus_dir.mkdir(parents=True, exist_ok=True)
+    (corpus_dir / "reference.jsonl").write_text(
+        '{"board_id":"B07","zone_id":"D","doc_id":"DOC-REF-002","source_type":"reference","text":"INGEST-EVIDENCE-B07"}\n',
+        encoding="utf-8",
+    )
+    (corpus_dir / "refined.jsonl").write_text("", encoding="utf-8")
+    (corpus_dir / "generated.jsonl").write_text("", encoding="utf-8")
+
+    index = build_index(packs, corpus_dir=corpus_dir)
+    result = retrieve_context(
+        index,
+        task="거래 사기 의혹 증거 확인",
+        seed="중계망 먹통 사건",
+        board_id="B07",
+        zone_id="D",
+        persona_ids=["P07"],
+        top_k=3,
+    )
+
+    assert any("INGEST-EVIDENCE-B07" in text for text in result["corpus"])

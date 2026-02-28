@@ -176,3 +176,36 @@ def test_web_api_kb_query_methods(tmp_path: Path):
     assert "corpus" in ctx
     assert ctx["bundle"]["board_id"] == "B07"
     assert ctx["corpus"]
+
+
+def test_web_api_kb_query_uses_ingested_corpus(tmp_path: Path):
+    repo = FileRunRepository(tmp_path / "runs")
+    corpus_dir = tmp_path / "corpus"
+    corpus_dir.mkdir(parents=True, exist_ok=True)
+    (corpus_dir / "reference.jsonl").write_text(
+        '{"board_id":"B07","zone_id":"D","doc_id":"DOC-API-001","source_type":"reference","text":"API-INGEST-CTX-B07"}\n',
+        encoding="utf-8",
+    )
+    (corpus_dir / "refined.jsonl").write_text("", encoding="utf-8")
+    (corpus_dir / "generated.jsonl").write_text("", encoding="utf-8")
+
+    api = ProjectDreamAPI(repository=repo, packs_dir=Path("packs"), corpus_dir=corpus_dir)
+
+    searched = api.search_knowledge(
+        query="API-INGEST-CTX-B07",
+        filters={"kind": "corpus", "board_id": "B07"},
+        top_k=3,
+    )
+    assert searched["count"] >= 1
+    assert searched["items"][0]["kind"] == "corpus"
+    assert searched["items"][0]["source_type"] == "reference"
+
+    ctx = api.retrieve_context_bundle(
+        task="거래 사기 의혹",
+        seed="중계망 장애",
+        board_id="B07",
+        zone_id="D",
+        persona_ids=["P07"],
+        top_k=3,
+    )
+    assert any("API-INGEST-CTX-B07" in text for text in ctx["corpus"])

@@ -255,6 +255,31 @@ def _read_jsonl(path: Path) -> list[dict]:
     return rows
 
 
+def load_corpus_rows(
+    corpus_dir: Path,
+    source_types: tuple[str, ...] = ("reference", "refined", "generated"),
+) -> list[dict]:
+    if not corpus_dir.exists():
+        return []
+
+    source_to_path = {
+        "reference": corpus_dir / "reference.jsonl",
+        "refined": corpus_dir / "refined.jsonl",
+        "generated": corpus_dir / "generated.jsonl",
+    }
+
+    rows: list[dict] = []
+    for source_type in source_types:
+        path = source_to_path.get(source_type)
+        if path is None:
+            continue
+        for row in _read_jsonl(path):
+            copied = dict(row)
+            copied.setdefault("source_type", source_type)
+            rows.append(copied)
+    return rows
+
+
 def load_corpus_texts(corpus_dir: Path, source_types: tuple[str, ...] = ("reference", "refined")) -> list[str]:
     if not corpus_dir.exists():
         return []

@@ -50,6 +50,7 @@ python -m project_dream.cli ingest --packs-dir packs --corpus-dir corpus
 
 `simulate`, `regress`, `regress-live`는 기본적으로 `corpus/`를 자동 로드해 context corpus에 병합합니다.
 다른 경로를 쓰려면 각 명령에 `--corpus-dir <path>`를 지정하면 됩니다.
+또한 KB 조회(`search_knowledge`, `retrieve_context_bundle`)도 동일 `corpus/`를 인덱싱해 `kind=corpus` 검색이 가능합니다.
 
 ### Run Tests With Gemini 3.1 Flash
 

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any
 
+from project_dream.data_ingest import load_corpus_rows
 from project_dream.pack_service import LoadedPacks
 
 
@@ -57,7 +59,7 @@ def _score(query: str, text: str) -> int:
     return overlap + phrase_bonus
 
 
-def build_index(packs: LoadedPacks) -> dict[str, Any]:
+def build_index(packs: LoadedPacks, corpus_dir: Path | None = None) -> dict[str, Any]:
     passages: list[dict] = []
     communities = packs.communities
 
@@ -170,6 +172,25 @@ def build_index(packs: LoadedPacks) -> dict[str, Any]:
             }
         )
 
+    if corpus_dir is not None:
+        corpus_rows = load_corpus_rows(corpus_dir)
+        for idx, row in enumerate(corpus_rows):
+            text = str(row.get("text", "")).strip()
+            if not text:
+                continue
+            item_id = str(row.get("doc_id", "")).strip() or f"corpus-{idx+1:06d}"
+            passages.append(
+                {
+                    "kind": "corpus",
+                    "item_id": item_id,
+                    "board_id": row.get("board_id"),
+                    "zone_id": row.get("zone_id"),
+                    "source_type": row.get("source_type"),
+                    "doc_type": row.get("doc_type"),
+                    "text": text,
+                }
+            )
+
     return {"passages": passages, "packs": packs}
 
 
@@ -241,7 +262,7 @@ def retrieve_context(
     evidence = search(
         index,
         query=f"{task} {seed} 증거 로그 출처 근거",
-        filters={"kind": ["board", "community", "persona"], "board_id": board_id},
+        filters={"kind": ["board", "community", "persona", "corpus"], "board_id": board_id},
         top_k=top_k,
     )
     policy = search(
