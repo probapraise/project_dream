@@ -1,7 +1,7 @@
 from project_dream.env_engine import apply_policy_transition, compute_score
 from project_dream.gen_engine import generate_comment
 from project_dream.gate_pipeline import run_gates
-from project_dream.persona_service import select_participants
+from project_dream.persona_service import render_voice, select_participants
 
 
 def _select_community_id(seed, packs) -> str:
@@ -67,11 +67,13 @@ def run_simulation(
         for idx, persona_id in enumerate(participants):
             before_entries = persona_memory.get(persona_id, [])
             memory_before = _memory_summary(before_entries)
+            voice_constraints = render_voice(persona_id, seed.zone_id, packs=packs)
             text = generate_comment(
                 seed,
                 persona_id,
                 round_idx=round_idx,
                 memory_hint=memory_before,
+                voice_constraints=voice_constraints,
             )
             last = None
             total_failed_in_attempts = 0
@@ -126,6 +128,7 @@ def run_simulation(
                     "text": last["final_text"],
                     "memory_before": memory_before,
                     "memory_after": memory_after,
+                    "voice_style": voice_constraints.get("sentence_length", "medium"),
                 }
             )
             gate_logs.append({"round": round_idx, "persona_id": persona_id, "gates": last["gates"]})

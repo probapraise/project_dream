@@ -23,6 +23,7 @@ def test_simulation_reuses_persona_memory_hint(monkeypatch):
         llm_client=None,
         template_set: str = "v1",
         memory_hint: str | None = None,
+        voice_constraints: dict | None = None,
     ) -> str:
         captured_calls.append(
             {
@@ -89,6 +90,7 @@ def test_memory_hint_excludes_system_rewrite_artifacts(monkeypatch):
         llm_client=None,
         template_set: str = "v1",
         memory_hint: str | None = None,
+        voice_constraints: dict | None = None,
     ) -> str:
         captured_calls.append(
             {

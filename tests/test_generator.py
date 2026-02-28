@@ -53,3 +53,31 @@ def test_generator_includes_memory_hint_when_provided():
 
     assert "memory=R2: 이전에는 근거 링크를 먼저 요구했다" in output
     assert len(client.calls) == 1
+
+
+def test_generator_includes_voice_hint_when_provided():
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+
+        def generate(self, prompt: str, *, task: str) -> str:
+            self.calls.append({"prompt": prompt, "task": task})
+            return prompt
+
+    seed = SeedInput(seed_id="SEED-004", title="사건4", summary="요약4", board_id="B04", zone_id="B")
+    client = FakeClient()
+
+    output = generate_comment(
+        seed,
+        "P-202",
+        round_idx=1,
+        llm_client=client,
+        voice_constraints={
+            "sentence_length": "short",
+            "endings": ["임", "각"],
+            "taboo_words": ["injury_dox", "doping_claim_no_proof"],
+        },
+    )
+
+    assert "voice=style:short;endings:임/각;taboo_count:2" in output
+    assert len(client.calls) == 1
