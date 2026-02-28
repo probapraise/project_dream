@@ -271,6 +271,99 @@ def evaluate_run(run_dir: Path, metric_set: str = "v1") -> dict:
         )
     )
 
+    indices_by_type: dict[str, list[int]] = {}
+    for idx, row in enumerate(runlog_rows):
+        row_type = row.get("type")
+        if not row_type:
+            continue
+        indices_by_type.setdefault(str(row_type), []).append(idx)
+
+    core_indices = [
+        idx
+        for row_type in ("round", "gate", "action")
+        for idx in indices_by_type.get(row_type, [])
+    ]
+    first_round_idx = (
+        min(indices_by_type.get("round", [])) if indices_by_type.get("round") else None
+    )
+    core_last_idx = max(core_indices) if core_indices else None
+
+    context_first_idx = (
+        min(indices_by_type.get("context", [])) if indices_by_type.get("context") else None
+    )
+    thread_candidate_last_idx = (
+        max(indices_by_type.get("thread_candidate", []))
+        if indices_by_type.get("thread_candidate")
+        else None
+    )
+    thread_selected_first_idx = (
+        min(indices_by_type.get("thread_selected", []))
+        if indices_by_type.get("thread_selected")
+        else None
+    )
+    round_summary_first_idx = (
+        min(indices_by_type.get("round_summary", []))
+        if indices_by_type.get("round_summary")
+        else None
+    )
+    round_summary_last_idx = (
+        max(indices_by_type.get("round_summary", []))
+        if indices_by_type.get("round_summary")
+        else None
+    )
+    moderation_first_idx = (
+        min(indices_by_type.get("moderation_decision", []))
+        if indices_by_type.get("moderation_decision")
+        else None
+    )
+    moderation_last_idx = (
+        max(indices_by_type.get("moderation_decision", []))
+        if indices_by_type.get("moderation_decision")
+        else None
+    )
+    end_condition_idx = (
+        min(indices_by_type.get("end_condition", []))
+        if indices_by_type.get("end_condition")
+        else None
+    )
+
+    stage_trace_ordered = (
+        context_first_idx is not None
+        and first_round_idx is not None
+        and core_last_idx is not None
+        and thread_candidate_last_idx is not None
+        and thread_selected_first_idx is not None
+        and round_summary_first_idx is not None
+        and round_summary_last_idx is not None
+        and moderation_first_idx is not None
+        and moderation_last_idx is not None
+        and end_condition_idx is not None
+        and context_first_idx < first_round_idx
+        and thread_candidate_last_idx < first_round_idx
+        and thread_selected_first_idx < first_round_idx
+        and round_summary_first_idx > core_last_idx
+        and moderation_first_idx > round_summary_last_idx
+        and end_condition_idx > moderation_last_idx
+    )
+    checks.append(
+        EvalCheck(
+            name="runlog.stage_trace_ordering",
+            passed=stage_trace_ordered,
+            details=(
+                f"context_first={context_first_idx};"
+                f"first_round={first_round_idx};"
+                f"core_last={core_last_idx};"
+                f"thread_candidate_last={thread_candidate_last_idx};"
+                f"thread_selected_first={thread_selected_first_idx};"
+                f"round_summary_first={round_summary_first_idx};"
+                f"round_summary_last={round_summary_last_idx};"
+                f"moderation_first={moderation_first_idx};"
+                f"moderation_last={moderation_last_idx};"
+                f"end_condition={end_condition_idx}"
+            ),
+        )
+    )
+
     checks.append(
         EvalCheck(
             name="report.schema_version",
@@ -331,6 +424,7 @@ def evaluate_run(run_dir: Path, metric_set: str = "v1") -> dict:
             "context_rows": len(context_rows),
             "stage_trace_rows": sum(stage_type_counts.values()),
             "stage_trace_consistent": int(stage_trace_consistent),
+            "stage_trace_ordered": int(stage_trace_ordered),
             "round_rows": sum(1 for row in runlog_rows if row.get("type") == "round"),
             "gate_rows": sum(1 for row in runlog_rows if row.get("type") == "gate"),
             "action_rows": sum(1 for row in runlog_rows if row.get("type") == "action"),

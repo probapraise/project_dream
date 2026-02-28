@@ -28,6 +28,13 @@ def _write_valid_run(run_dir: Path) -> None:
             "score": 0.9,
         },
         {
+            "type": "round",
+            "round": 1,
+            "community_id": "COM-PLZ-001",
+        },
+        {"type": "gate", "round": 1, "gates": [{"gate_name": "safety", "passed": True}]},
+        {"type": "action", "round": 1, "action_type": "REPORT"},
+        {
             "type": "round_summary",
             "round": 1,
             "participant_count": 1,
@@ -52,9 +59,6 @@ def _write_valid_run(run_dir: Path) -> None:
             "ended_early": False,
             "status": "visible",
         },
-        {"type": "round", "round": 1, "community_id": "COM-PLZ-001"},
-        {"type": "gate", "round": 1, "gates": [{"gate_name": "safety", "passed": True}]},
-        {"type": "action", "round": 1, "action_type": "REPORT"},
     ]
     runlog.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows), encoding="utf-8")
 
@@ -179,5 +183,33 @@ def test_evaluate_run_fails_when_stage_trace_inconsistent(tmp_path: Path):
     assert result["pass_fail"] is False
     assert any(
         c["name"] == "runlog.stage_trace_consistency" and c["passed"] is False
+        for c in result["checks"]
+    )
+
+
+def test_evaluate_run_fails_when_stage_trace_ordering_is_invalid(tmp_path: Path):
+    run_dir = tmp_path / "runs" / "run-6"
+    _write_valid_run(run_dir)
+
+    rows = [
+        json.loads(line)
+        for line in (run_dir / "runlog.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    end_idx = next(idx for idx, row in enumerate(rows) if row.get("type") == "end_condition")
+    round_idx = next(idx for idx, row in enumerate(rows) if row.get("type") == "round")
+    rows[end_idx], rows[round_idx] = rows[round_idx], rows[end_idx]
+
+    (run_dir / "runlog.jsonl").write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in rows),
+        encoding="utf-8",
+    )
+
+    result = evaluate_run(run_dir)
+
+    assert result["pass_fail"] is False
+    assert any(
+        c["name"] == "runlog.stage_trace_ordering" and c["passed"] is False
         for c in result["checks"]
     )
