@@ -9,13 +9,22 @@ class Dial(BaseModel):
     H: int = 15
 
 
-class SeedInput(BaseModel):
+class EpisodeSeed(BaseModel):
     seed_id: str
     title: str
     summary: str
     board_id: str
     zone_id: str
     dial: Dial = Field(default_factory=Dial)
+    public_facts: list[str] = Field(default_factory=list)
+    hidden_facts: list[str] = Field(default_factory=list)
+    stakeholders: list[str] = Field(default_factory=list)
+    forbidden_terms: list[str] = Field(default_factory=list)
+    sensitivity_tags: list[str] = Field(default_factory=list)
+
+
+class SeedInput(EpisodeSeed):
+    pass
 
 
 class GateResult(BaseModel):
@@ -49,6 +58,7 @@ class ReportV1(BaseModel):
     dialogue_candidates: list[dict]
     foreshadowing: list[str]
     risk_checks: list[ReportRiskCheck]
+    seed_constraints: dict = Field(default_factory=dict)
 
 
 class EvalCheck(BaseModel):

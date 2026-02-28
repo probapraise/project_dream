@@ -57,6 +57,7 @@ def persist_run(output_dir: Path, sim_result: dict, report: dict) -> Path:
     run_id = datetime.now(UTC).strftime("run-%Y%m%d-%H%M%S") + f"-{uuid4().hex[:6]}"
     run_dir = output_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
+    seed_payload = sim_result.get("seed")
 
     with (run_dir / "runlog.jsonl").open("w", encoding="utf-8") as fp:
         context_bundle = sim_result.get("context_bundle")
@@ -67,6 +68,7 @@ def persist_run(output_dir: Path, sim_result: dict, report: dict) -> Path:
                         "type": "context",
                         "bundle": context_bundle,
                         "corpus": sim_result.get("context_corpus", []),
+                        "seed": seed_payload if isinstance(seed_payload, dict) else None,
                     },
                     ensure_ascii=False,
                 )
@@ -157,6 +159,11 @@ def persist_run(output_dir: Path, sim_result: dict, report: dict) -> Path:
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     (run_dir / "report.md").write_text(render_report_markdown(report), encoding="utf-8")
+    if isinstance(seed_payload, dict):
+        (run_dir / "seed.json").write_text(
+            json.dumps(seed_payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
     return run_dir
 
 

@@ -14,6 +14,11 @@ def test_cli_simulate_writes_run_outputs(tmp_path: Path):
                 "summary": "장터기둥 장애",
                 "board_id": "B07",
                 "zone_id": "D",
+                "public_facts": ["공개 사실: 거래 로그 일부 공개"],
+                "hidden_facts": ["숨김 사실: 내부 제보자 존재"],
+                "stakeholders": ["상인 연합", "운영팀"],
+                "forbidden_terms": ["실명노출"],
+                "sensitivity_tags": ["privacy"],
             }
         ),
         encoding="utf-8",
@@ -35,19 +40,27 @@ def test_cli_simulate_writes_run_outputs(tmp_path: Path):
     assert runlogs
     report_md_files = list((tmp_path / "runs").glob("*/report.md"))
     report_json_files = list((tmp_path / "runs").glob("*/report.json"))
+    seed_json_files = list((tmp_path / "runs").glob("*/seed.json"))
     assert report_md_files
     assert report_json_files
+    assert seed_json_files
 
     runlog_path = runlogs[0]
     rows = [json.loads(line) for line in runlog_path.read_text(encoding="utf-8").splitlines()]
     assert any(row.get("type") == "round" and "community_id" in row for row in rows)
     assert any(row.get("type") == "action" for row in rows)
+    assert any(row.get("type") == "context" and "seed" in row for row in rows)
+
+    seed_json = json.loads(seed_json_files[0].read_text(encoding="utf-8"))
+    assert seed_json["seed_id"] == "SEED-001"
+    assert seed_json["hidden_facts"] == ["숨김 사실: 내부 제보자 존재"]
 
     report_json = json.loads(report_json_files[0].read_text(encoding="utf-8"))
     assert report_json["schema_version"] == "report.v1"
     assert len(report_json["lens_summaries"]) == 4
     assert "conflict_map" in report_json
     assert 3 <= len(report_json["dialogue_candidates"]) <= 5
+    assert "seed_constraints" in report_json
 
     report_md = report_md_files[0].read_text(encoding="utf-8")
     assert "## Conflict Map" in report_md

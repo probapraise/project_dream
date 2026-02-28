@@ -21,5 +21,37 @@
     {"id": "P4", "name": "규정 해석전", "phases": ["early:조항인용", "mid:판례충돌", "late:항소"]},
     {"id": "P5", "name": "거래/사기 추적", "phases": ["early:의뢰", "mid:검증", "late:블랙리스트"]},
     {"id": "P6", "name": "밈 과열", "phases": ["early:패러디", "mid:확산", "late:봉문"]}
+  ],
+  "event_cards": [
+    {
+      "id": "EV-001",
+      "name": "운영 공지 역풍",
+      "intended_boards": ["B07", "B11", "B16"],
+      "trigger_tags": ["ops", "backlash"],
+      "summary": "운영 공지가 올라오자 해석 전쟁이 붙는다"
+    },
+    {
+      "id": "EV-002",
+      "name": "증거 만료 카운트다운",
+      "intended_boards": ["B01", "B05", "B07"],
+      "trigger_tags": ["evidence", "countdown"],
+      "summary": "증거 유효기간이 임박해 담론이 급격히 과열된다"
+    }
+  ],
+  "meme_seeds": [
+    {
+      "id": "MM-001",
+      "name": "정렬이진실",
+      "intended_boards": ["B07", "B16", "B17"],
+      "style_tags": ["satire", "remix"],
+      "summary": "짧은 문구가 밈으로 확산된다"
+    },
+    {
+      "id": "MM-002",
+      "name": "증거만료챌린지",
+      "intended_boards": ["B01", "B05", "B15"],
+      "style_tags": ["countdown", "parody"],
+      "summary": "만료 타이머를 패러디하는 짤이 연쇄 생성된다"
+    }
   ]
 }

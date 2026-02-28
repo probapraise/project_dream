@@ -67,3 +67,28 @@ def test_report_v1_accepts_custom_llm_client_for_summary_and_dialogue():
     dialogue_calls = [call for call in fake_client.calls if call["task"] == "report_dialogue_candidate"]
     assert len(dialogue_calls) == len(report["dialogue_candidates"])
     assert report["report_gate"]["schema_version"] == "report_gate.v1"
+
+
+def test_report_v1_includes_seed_constraints_summary():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    seed = SeedInput(
+        seed_id="SEED-RPT-003",
+        title="시드 제약 반영",
+        summary="금지어와 민감도 태그 반영 확인",
+        board_id="B07",
+        zone_id="D",
+        public_facts=["공개 A"],
+        hidden_facts=["숨김 B"],
+        stakeholders=["이해관계자 C"],
+        forbidden_terms=["실명노출"],
+        sensitivity_tags=["privacy"],
+    )
+    sim_result = run_simulation(seed=seed, rounds=3, corpus=["샘플"], packs=packs)
+
+    report = build_report_v1(seed, sim_result, packs)
+
+    assert "seed_constraints" in report
+    constraints = report["seed_constraints"]
+    assert constraints["forbidden_terms"] == ["실명노출"]
+    assert constraints["sensitivity_tags"] == ["privacy"]
+    assert constraints["has_hidden_facts"] is True

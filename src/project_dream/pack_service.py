@@ -23,6 +23,8 @@ class LoadedPacks:
     personas: dict[str, dict]
     thread_templates: dict[str, dict]
     comment_flows: dict[str, dict]
+    event_cards: dict[str, dict]
+    meme_seeds: dict[str, dict]
 
 
 _FLOW_TABOO_HINTS = {
@@ -236,6 +238,8 @@ def load_packs(base_dir: Path, enforce_phase1_minimums: bool = False) -> LoadedP
     personas = _index_by_id(persona_pack.get("personas", []), "persona")
     raw_thread_templates = _index_by_id(template_pack.get("thread_templates", []), "thread_template")
     raw_comment_flows = _index_by_id(template_pack.get("comment_flows", []), "comment_flow")
+    event_cards = _index_by_id(template_pack.get("event_cards", []), "event_card")
+    meme_seeds = _index_by_id(template_pack.get("meme_seeds", []), "meme_seed")
     thread_templates = {
         template_id: _normalize_thread_template(template, boards=boards)
         for template_id, template in raw_thread_templates.items()
@@ -274,6 +278,16 @@ def load_packs(base_dir: Path, enforce_phase1_minimums: bool = False) -> LoadedP
             if board_id not in boards:
                 raise ValueError(f"Unknown crosspost board_id in template {template['id']}: {board_id}")
 
+    for event in event_cards.values():
+        for board_id in _as_str_list(event.get("intended_boards")):
+            if board_id not in boards:
+                raise ValueError(f"Unknown intended board_id in event_card {event['id']}: {board_id}")
+
+    for meme in meme_seeds.values():
+        for board_id in _as_str_list(meme.get("intended_boards")):
+            if board_id not in boards:
+                raise ValueError(f"Unknown intended board_id in meme_seed {meme['id']}: {board_id}")
+
     packs = LoadedPacks(
         boards=boards,
         communities=communities,
@@ -283,6 +297,8 @@ def load_packs(base_dir: Path, enforce_phase1_minimums: bool = False) -> LoadedP
         personas=personas,
         thread_templates=thread_templates,
         comment_flows=comment_flows,
+        event_cards=event_cards,
+        meme_seeds=meme_seeds,
     )
 
     if enforce_phase1_minimums:

@@ -10,3 +10,23 @@ def test_seed_input_defaults_and_validation():
         zone_id="D",
     )
     assert seed.dial == Dial(U=30, E=25, M=15, S=15, H=15)
+
+
+def test_seed_input_v2_fields_are_supported():
+    seed = SeedInput(
+        seed_id="SEED-002",
+        title="사건 2",
+        summary="요약 2",
+        board_id="B08",
+        zone_id="C",
+        public_facts=["공개 사실 A"],
+        hidden_facts=["숨김 사실 B"],
+        stakeholders=["조직 A", "조직 B"],
+        forbidden_terms=["금지어X"],
+        sensitivity_tags=["legal", "privacy"],
+    )
+    assert seed.public_facts == ["공개 사실 A"]
+    assert seed.hidden_facts == ["숨김 사실 B"]
+    assert seed.stakeholders == ["조직 A", "조직 B"]
+    assert seed.forbidden_terms == ["금지어X"]
+    assert seed.sensitivity_tags == ["legal", "privacy"]

@@ -81,9 +81,12 @@ def run_gates(
     corpus: list[str],
     similarity_threshold: int = 85,
     template_set: str = "v1",
+    forbidden_terms: list[str] | None = None,
+    sensitivity_tags: list[str] | None = None,
 ) -> dict:
     gates = []
     aggregate_violations: list[dict] = []
+    raw_text = text
     current = text
 
     # Gate 1: Safety
@@ -116,6 +119,29 @@ def run_gates(
                     entity_refs=["ENT-SAFETY-LANGUAGE"],
                 )
             )
+    for raw_term in forbidden_terms or []:
+        term = str(raw_term).strip()
+        if not term:
+            continue
+        found_in_raw = term in raw_text
+        found_in_current = term in current
+        if not found_in_raw and not found_in_current:
+            continue
+        warnings.append(f"SEED_FORBIDDEN_TERM:{term}")
+        if found_in_current:
+            current = current.replace(term, "제약어")
+        refs = ["ENT-SEED-CONSTRAINT"]
+        refs.extend([f"ENT-SENS:{tag}" for tag in (sensitivity_tags or []) if str(tag).strip()])
+        safety_violations.append(
+            _build_violation(
+                gate_name="safety",
+                rule_id="RULE-PLZ-SAFE-03",
+                code="SEED_FORBIDDEN_TERM",
+                message=f"Seed 금지어 감지: {term}",
+                severity="high",
+                entity_refs=refs,
+            )
+        )
     safety_pass = len(warnings) == 0
     aggregate_violations.extend(safety_violations)
     gates.append(
@@ -124,6 +150,7 @@ def run_gates(
             "passed": safety_pass,
             "reason": f"warnings={len(warnings)}",
             "warnings": warnings,
+            "sensitivity_tags": [str(tag) for tag in (sensitivity_tags or []) if str(tag).strip()],
             "violations": safety_violations,
         }
     )

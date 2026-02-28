@@ -229,3 +229,22 @@ def test_simulation_emits_flow_escalation_actions():
     assert flow_actions
     assert all("reason_rule_id" in row for row in flow_actions)
     assert all(str(row["reason_rule_id"]).startswith("RULE-PLZ-") for row in flow_actions)
+
+
+def test_simulation_selects_event_card_and_meme_seed():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    seed = SeedInput(
+        seed_id="SEED-EVENT-MEME-001",
+        title="이벤트/밈 선택 테스트",
+        summary="템플릿 기반으로 이벤트 카드와 밈 시드를 고른다",
+        board_id="B07",
+        zone_id="D",
+    )
+
+    result = run_simulation(seed=seed, rounds=2, corpus=["샘플"], packs=packs)
+    selected = result["selected_thread"]
+
+    assert selected.get("event_card_id")
+    assert selected.get("meme_seed_id")
+    assert all(row.get("event_card_id") == selected["event_card_id"] for row in result["rounds"])
+    assert all(row.get("meme_seed_id") == selected["meme_seed_id"] for row in result["rounds"])

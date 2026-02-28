@@ -87,6 +87,22 @@ class CommentFlowRow(_StrictModel):
     escalation_rules: list[EscalationRule] = Field(default_factory=list)
 
 
+class EventCardRow(_StrictModel):
+    id: StrictStr
+    name: StrictStr
+    intended_boards: list[StrictStr] = Field(default_factory=list)
+    trigger_tags: list[StrictStr] = Field(default_factory=list)
+    summary: StrictStr = ""
+
+
+class MemeSeedRow(_StrictModel):
+    id: StrictStr
+    name: StrictStr
+    intended_boards: list[StrictStr] = Field(default_factory=list)
+    style_tags: list[StrictStr] = Field(default_factory=list)
+    summary: StrictStr = ""
+
+
 class BoardPackPayload(_StrictModel):
     version: StrictStr = "1.0.0"
     boards: list[BoardRow] = Field(default_factory=list)
@@ -118,6 +134,8 @@ class TemplatePackPayload(_StrictModel):
     version: StrictStr = "1.0.0"
     thread_templates: list[ThreadTemplateRow] = Field(default_factory=list)
     comment_flows: list[CommentFlowRow] = Field(default_factory=list)
+    event_cards: list[EventCardRow] = Field(default_factory=list)
+    meme_seeds: list[MemeSeedRow] = Field(default_factory=list)
 
 
 _ModelT = TypeVar("_ModelT", bound=BaseModel)

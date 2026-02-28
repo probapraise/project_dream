@@ -26,3 +26,15 @@ def test_pack_service_includes_template_flow_runtime_fields():
     assert flow["escalation_rules"]
     first_rule = flow["escalation_rules"][0]
     assert {"condition", "action_type", "reason_rule_id"} <= set(first_rule.keys())
+
+
+def test_pack_service_loads_event_cards_and_meme_seeds():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+
+    assert packs.event_cards
+    assert packs.meme_seeds
+
+    first_event = next(iter(packs.event_cards.values()))
+    first_meme = next(iter(packs.meme_seeds.values()))
+    assert "id" in first_event
+    assert "id" in first_meme

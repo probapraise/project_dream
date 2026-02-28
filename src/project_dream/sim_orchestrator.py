@@ -205,6 +205,26 @@ def _select_template(seed, packs) -> tuple[str, str]:
     return "T1", "P1"
 
 
+def _select_event_card_id(seed, packs) -> str:
+    if not packs or not getattr(packs, "event_cards", None):
+        return "EV-DEFAULT"
+    events = sorted(packs.event_cards.values(), key=lambda x: x["id"])
+    for event in events:
+        if seed.board_id in _as_str_list(event.get("intended_boards")):
+            return event["id"]
+    return events[0]["id"]
+
+
+def _select_meme_seed_id(seed, packs) -> str:
+    if not packs or not getattr(packs, "meme_seeds", None):
+        return "MM-DEFAULT"
+    memes = sorted(packs.meme_seeds.values(), key=lambda x: x["id"])
+    for meme in memes:
+        if seed.board_id in _as_str_list(meme.get("intended_boards")):
+            return meme["id"]
+    return memes[0]["id"]
+
+
 def _as_str_list(values: object) -> list[str]:
     if not isinstance(values, list):
         return []
@@ -290,6 +310,8 @@ def _build_thread_candidates(
     flow_id: str,
     template_context: dict | None = None,
     flow_context: dict | None = None,
+    event_card_id: str = "",
+    meme_seed_id: str = "",
     count: int = 3,
 ) -> list[dict]:
     frames = ("fact", "conflict", "rumor")
@@ -318,6 +340,8 @@ def _build_thread_candidates(
                 "community_id": community_id,
                 "thread_template_id": template_id,
                 "comment_flow_id": flow_id,
+                "event_card_id": event_card_id,
+                "meme_seed_id": meme_seed_id,
                 "frame": frame,
                 "title_pattern": title_pattern,
                 "rendered_title": rendered_title,
@@ -499,13 +523,20 @@ def _round_node_gate_retry(
     text: str,
     corpus: list[str],
     max_retries: int,
+    forbidden_terms: list[str] | None = None,
+    sensitivity_tags: list[str] | None = None,
 ) -> dict:
     last = None
     total_failed_in_attempts = 0
     current_text = text
 
     for _ in range(max_retries + 1):
-        last = run_gates(current_text, corpus=corpus)
+        gate_kwargs: dict[str, list[str]] = {}
+        if forbidden_terms:
+            gate_kwargs["forbidden_terms"] = list(forbidden_terms)
+        if sensitivity_tags:
+            gate_kwargs["sensitivity_tags"] = list(sensitivity_tags)
+        last = run_gates(current_text, corpus=corpus, **gate_kwargs)
         failed_in_attempt = [gate for gate in last["gates"] if not gate["passed"]]
         total_failed_in_attempts += len(failed_in_attempt)
         if not failed_in_attempt:
@@ -584,6 +615,8 @@ def _round_node_emit_logs(
     community_id: str,
     template_id: str,
     flow_id: str,
+    event_card_id: str,
+    meme_seed_id: str,
     selected_thread_candidate_id: str,
     selected_title_pattern: str,
     selected_trigger_tags: list[str],
@@ -616,6 +649,8 @@ def _round_node_emit_logs(
         "community_id": community_id,
         "thread_template_id": template_id,
         "comment_flow_id": flow_id,
+        "event_card_id": event_card_id,
+        "meme_seed_id": meme_seed_id,
         "thread_candidate_id": selected_thread_candidate_id,
         "status": status,
         "score": score,
@@ -743,6 +778,8 @@ def run_simulation(
     persona_memory: dict[str, list[str]] = {}
     community_id = _select_community_id(seed, packs)
     template_id, flow_id = _select_template(seed, packs)
+    event_card_id = _select_event_card_id(seed, packs)
+    meme_seed_id = _select_meme_seed_id(seed, packs)
     template_context = _resolve_template_context(packs, template_id)
     flow_context = _resolve_flow_context(packs, flow_id)
     thread_candidates = _build_thread_candidates(
@@ -752,6 +789,8 @@ def run_simulation(
         flow_id=flow_id,
         template_context=template_context,
         flow_context=flow_context,
+        event_card_id=event_card_id,
+        meme_seed_id=meme_seed_id,
         count=3,
     )
     selected_thread = _select_thread_candidate(thread_candidates)
@@ -763,6 +802,8 @@ def run_simulation(
         flow_context.get("body_sections")
     )
     template_taboos = _as_str_list(template_context.get("taboos"))
+    seed_forbidden_terms = _as_str_list(getattr(seed, "forbidden_terms", []))
+    seed_sensitivity_tags = _as_str_list(getattr(seed, "sensitivity_tags", []))
     fired_flow_actions: set[str] = set()
     account_type_cycle = ("public", "alias", "mask")
     sort_tab_cycle = ("latest", "weekly_hot", "evidence_first", "preserve_first")
@@ -807,6 +848,8 @@ def run_simulation(
                 text=str(generated["text"]),
                 corpus=corpus,
                 max_retries=max_retries,
+                forbidden_terms=seed_forbidden_terms,
+                sensitivity_tags=seed_sensitivity_tags,
             )
             transitioned = _round_node_policy_transition(
                 round_idx=round_idx,
@@ -837,6 +880,8 @@ def run_simulation(
                 community_id=community_id,
                 template_id=template_id,
                 flow_id=flow_id,
+                event_card_id=event_card_id,
+                meme_seed_id=meme_seed_id,
                 selected_thread_candidate_id=str(selected_thread.get("candidate_id", "TC-0")),
                 selected_title_pattern=selected_title_pattern,
                 selected_trigger_tags=selected_trigger_tags,
@@ -909,6 +954,8 @@ def run_simulation(
         "community_id": community_id,
         "thread_template_id": template_id,
         "comment_flow_id": flow_id,
+        "event_card_id": event_card_id,
+        "meme_seed_id": meme_seed_id,
         "title_pattern": selected_title_pattern,
         "trigger_tags": selected_trigger_tags,
         "body_sections": selected_body_sections,

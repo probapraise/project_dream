@@ -160,6 +160,22 @@ def _build_risk_checks(sim_result: dict) -> list[ReportRiskCheck]:
     return risk
 
 
+def _seed_constraints(seed) -> dict:
+    public_facts = [str(item) for item in getattr(seed, "public_facts", []) if str(item).strip()]
+    hidden_facts = [str(item) for item in getattr(seed, "hidden_facts", []) if str(item).strip()]
+    stakeholders = [str(item) for item in getattr(seed, "stakeholders", []) if str(item).strip()]
+    forbidden_terms = [str(item) for item in getattr(seed, "forbidden_terms", []) if str(item).strip()]
+    sensitivity_tags = [str(item) for item in getattr(seed, "sensitivity_tags", []) if str(item).strip()]
+    return {
+        "public_facts": public_facts,
+        "hidden_facts": hidden_facts,
+        "stakeholders": stakeholders,
+        "forbidden_terms": forbidden_terms,
+        "sensitivity_tags": sensitivity_tags,
+        "has_hidden_facts": len(hidden_facts) > 0,
+    }
+
+
 def build_report_v1(
     seed,
     sim_result: dict,
@@ -169,6 +185,19 @@ def build_report_v1(
 ) -> dict:
     client = llm_client if llm_client is not None else build_default_llm_client()
     round_count = len(sim_result.get("rounds", []))
+    constraints = _seed_constraints(seed)
+    risk_checks = _build_risk_checks(sim_result)
+    if constraints["forbidden_terms"] or constraints["sensitivity_tags"]:
+        risk_checks.append(
+            ReportRiskCheck(
+                category="seed_constraint",
+                severity="low",
+                details=(
+                    f"forbidden_terms={len(constraints['forbidden_terms'])}, "
+                    f"sensitivity_tags={','.join(constraints['sensitivity_tags']) or 'none'}"
+                ),
+            )
+        )
     summary_prompt = render_prompt(
         "report_summary",
         {
@@ -190,7 +219,8 @@ def build_report_v1(
             template_set=template_set,
         ),
         foreshadowing=_build_foreshadowing(sim_result),
-        risk_checks=_build_risk_checks(sim_result),
+        risk_checks=risk_checks,
+        seed_constraints=constraints,
     )
     payload = report.model_dump()
     payload["report_gate"] = run_report_gate(payload)

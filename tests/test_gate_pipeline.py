@@ -9,3 +9,16 @@ def test_gate_pipeline_masks_pii_and_reports_rewrite():
     assert safety_gate["passed"] is False
     assert "warnings" in safety_gate
     assert any(code == "PII_PHONE" for code in safety_gate["warnings"])
+
+
+def test_gate_pipeline_blocks_seed_forbidden_term():
+    result = run_gates(
+        "이 사건은 실명노출이 핵심이다",
+        corpus=[],
+        forbidden_terms=["실명노출"],
+        sensitivity_tags=["privacy"],
+    )
+    safety_gate = next(g for g in result["gates"] if g["gate_name"] == "safety")
+    assert safety_gate["passed"] is False
+    assert any("SEED_FORBIDDEN_TERM:실명노출" == code for code in safety_gate["warnings"])
+    assert any(item["rule_id"] == "RULE-PLZ-SAFE-03" for item in safety_gate["violations"])
