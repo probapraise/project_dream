@@ -153,3 +153,31 @@ def test_evaluate_run_fails_when_stage_trace_missing(tmp_path: Path):
         c["name"] == "runlog.stage_trace_present" and c["passed"] is False
         for c in result["checks"]
     )
+
+
+def test_evaluate_run_fails_when_stage_trace_inconsistent(tmp_path: Path):
+    run_dir = tmp_path / "runs" / "run-5"
+    _write_valid_run(run_dir)
+
+    rows = [
+        json.loads(line)
+        for line in (run_dir / "runlog.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    for row in rows:
+        if row.get("type") == "end_condition":
+            row["ended_round"] = 2
+            break
+
+    (run_dir / "runlog.jsonl").write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in rows),
+        encoding="utf-8",
+    )
+
+    result = evaluate_run(run_dir)
+
+    assert result["pass_fail"] is False
+    assert any(
+        c["name"] == "runlog.stage_trace_consistency" and c["passed"] is False
+        for c in result["checks"]
+    )

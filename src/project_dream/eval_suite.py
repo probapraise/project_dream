@@ -237,6 +237,40 @@ def evaluate_run(run_dir: Path, metric_set: str = "v1") -> dict:
         )
     )
 
+    round_ids = sorted({int(row.get("round", 0)) for row in runlog_rows if row.get("type") == "round"})
+    round_summary_ids = sorted(
+        {int(row.get("round", 0)) for row in runlog_rows if row.get("type") == "round_summary"}
+    )
+    moderation_ids = sorted(
+        {int(row.get("round", 0)) for row in runlog_rows if row.get("type") == "moderation_decision"}
+    )
+    end_conditions = [row for row in runlog_rows if row.get("type") == "end_condition"]
+    ended_round = None
+    if end_conditions:
+        ended_round = int(end_conditions[0].get("ended_round", 0))
+
+    stage_trace_consistent = (
+        len(end_conditions) == 1
+        and ended_round is not None
+        and ended_round > 0
+        and ended_round == len(round_ids)
+        and round_ids == round_summary_ids
+        and round_ids == moderation_ids
+    )
+    checks.append(
+        EvalCheck(
+            name="runlog.stage_trace_consistency",
+            passed=stage_trace_consistent,
+            details=(
+                f"end_condition_rows={len(end_conditions)};"
+                f"ended_round={ended_round};"
+                f"round_ids={round_ids};"
+                f"round_summary_ids={round_summary_ids};"
+                f"moderation_ids={moderation_ids}"
+            ),
+        )
+    )
+
     checks.append(
         EvalCheck(
             name="report.schema_version",
@@ -296,6 +330,7 @@ def evaluate_run(run_dir: Path, metric_set: str = "v1") -> dict:
             "runlog_rows": len(runlog_rows),
             "context_rows": len(context_rows),
             "stage_trace_rows": sum(stage_type_counts.values()),
+            "stage_trace_consistent": int(stage_trace_consistent),
             "round_rows": sum(1 for row in runlog_rows if row.get("type") == "round"),
             "gate_rows": sum(1 for row in runlog_rows if row.get("type") == "gate"),
             "action_rows": sum(1 for row in runlog_rows if row.get("type") == "action"),
