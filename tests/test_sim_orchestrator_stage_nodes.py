@@ -1,5 +1,6 @@
 from project_dream.models import SeedInput
 from project_dream.sim_orchestrator import (
+    ROUND_LOOP_NODE_ORDER,
     SIMULATION_STAGE_NODE_ORDER,
     assemble_sim_result_from_stage_payloads,
     extract_stage_payloads,
@@ -43,6 +44,15 @@ def test_stage_payload_order_is_stable():
     )
 
 
+def test_round_loop_node_order_is_stable():
+    assert ROUND_LOOP_NODE_ORDER == (
+        "generate_comment",
+        "gate_retry",
+        "policy_transition",
+        "emit_logs",
+    )
+
+
 def test_extract_stage_payloads_returns_copies():
     sim_result = run_simulation(seed=_seed(), rounds=3, corpus=["ctx-1"])
 
@@ -52,3 +62,49 @@ def test_extract_stage_payloads_returns_copies():
 
     assert all(row.get("round") != 999 for row in sim_result["rounds"])
     assert all(row.get("round") != 999 for row in sim_result["round_summaries"])
+
+
+def test_simulation_round_rows_include_round_loop_nodes_trace():
+    sim_result = run_simulation(seed=_seed(), rounds=3, corpus=["ctx-1"])
+    assert sim_result["rounds"]
+
+    first_row = sim_result["rounds"][0]
+    assert first_row["round_loop_nodes"] == list(ROUND_LOOP_NODE_ORDER)
+
+
+def test_simulation_calls_round_loop_node_helpers(monkeypatch):
+    import project_dream.sim_orchestrator as sim_orchestrator
+
+    calls = {"generate": 0, "gate": 0, "policy": 0, "emit": 0}
+    original_generate = sim_orchestrator._round_node_generate_comment
+    original_gate = sim_orchestrator._round_node_gate_retry
+    original_policy = sim_orchestrator._round_node_policy_transition
+    original_emit = sim_orchestrator._round_node_emit_logs
+
+    def wrapped_generate(*args, **kwargs):
+        calls["generate"] += 1
+        return original_generate(*args, **kwargs)
+
+    def wrapped_gate(*args, **kwargs):
+        calls["gate"] += 1
+        return original_gate(*args, **kwargs)
+
+    def wrapped_policy(*args, **kwargs):
+        calls["policy"] += 1
+        return original_policy(*args, **kwargs)
+
+    def wrapped_emit(*args, **kwargs):
+        calls["emit"] += 1
+        return original_emit(*args, **kwargs)
+
+    monkeypatch.setattr(sim_orchestrator, "_round_node_generate_comment", wrapped_generate)
+    monkeypatch.setattr(sim_orchestrator, "_round_node_gate_retry", wrapped_gate)
+    monkeypatch.setattr(sim_orchestrator, "_round_node_policy_transition", wrapped_policy)
+    monkeypatch.setattr(sim_orchestrator, "_round_node_emit_logs", wrapped_emit)
+
+    sim_result = sim_orchestrator.run_simulation(seed=_seed(), rounds=2, corpus=["ctx-1"])
+    assert sim_result["rounds"]
+    assert calls["generate"] >= 1
+    assert calls["gate"] >= 1
+    assert calls["policy"] >= 1
+    assert calls["emit"] >= 1

@@ -3,6 +3,7 @@ from project_dream.gen_engine import generate_comment, pop_last_generation_trace
 from project_dream.gate_pipeline import run_gates
 from project_dream.persona_service import render_voice, select_participants
 from project_dream.prompt_templates import render_prompt
+from typing import TypedDict
 
 SIMULATION_STAGE_NODE_ORDER = (
     "thread_candidate",
@@ -10,6 +11,41 @@ SIMULATION_STAGE_NODE_ORDER = (
     "moderation",
     "end_condition",
 )
+ROUND_LOOP_NODE_ORDER = (
+    "generate_comment",
+    "gate_retry",
+    "policy_transition",
+    "emit_logs",
+)
+
+
+class ThreadCandidateStagePayload(TypedDict):
+    thread_candidates: list[dict]
+    selected_thread: dict | None
+
+
+class RoundLoopStagePayload(TypedDict):
+    rounds: list[dict]
+    gate_logs: list[dict]
+    action_logs: list[dict]
+    persona_memory: dict[str, list[str]]
+
+
+class ModerationStagePayload(TypedDict):
+    round_summaries: list[dict]
+    moderation_decisions: list[dict]
+
+
+class EndConditionStagePayload(TypedDict):
+    end_condition: dict | None
+    thread_state: dict | None
+
+
+class SimulationStagePayloads(TypedDict):
+    thread_candidate: ThreadCandidateStagePayload
+    round_loop: RoundLoopStagePayload
+    moderation: ModerationStagePayload
+    end_condition: EndConditionStagePayload
 
 
 def _select_community_id(seed, packs) -> str:
@@ -268,7 +304,251 @@ def _collect_flow_escalation_events(
     return events
 
 
-def extract_stage_payloads(sim_result: dict) -> dict[str, dict]:
+def _round_node_generate_comment(
+    *,
+    seed,
+    persona_id: str,
+    round_idx: int,
+    memory_before: str,
+    voice_constraints: dict,
+    selected_title_pattern: str,
+    selected_trigger_tags: list[str],
+    template_taboos: list[str],
+    selected_body_sections: list[str],
+) -> dict:
+    reset_last_generation_trace()
+    text = generate_comment(
+        seed,
+        persona_id,
+        round_idx=round_idx,
+        memory_hint=memory_before,
+        voice_constraints=voice_constraints,
+        template_context={
+            "title_pattern": selected_title_pattern,
+            "trigger_tags": selected_trigger_tags,
+            "taboos": template_taboos,
+        },
+        flow_context={
+            "body_sections": selected_body_sections,
+        },
+    )
+    generation_trace = pop_last_generation_trace() or {}
+    stage1_trace = generation_trace.get(
+        "stage1",
+        {
+            "claim": "",
+            "evidence": "",
+            "intent": "",
+            "dial": "",
+            "title_pattern": "",
+            "trigger_tags": [],
+            "body_sections": [],
+            "template_taboos": [],
+        },
+    )
+    stage2_trace = generation_trace.get(
+        "stage2",
+        {
+            "voice_hint": "",
+            "prompt": "",
+            "sections": [],
+            "trigger_tags": [],
+        },
+    )
+    return {
+        "text": text,
+        "stage1_trace": stage1_trace,
+        "stage2_trace": stage2_trace,
+    }
+
+
+def _round_node_gate_retry(
+    *,
+    text: str,
+    corpus: list[str],
+    max_retries: int,
+) -> dict:
+    last = None
+    total_failed_in_attempts = 0
+    current_text = text
+
+    for _ in range(max_retries + 1):
+        last = run_gates(current_text, corpus=corpus)
+        failed_in_attempt = [gate for gate in last["gates"] if not gate["passed"]]
+        total_failed_in_attempts += len(failed_in_attempt)
+        if not failed_in_attempt:
+            break
+        current_text = last["final_text"]
+
+    assert last is not None
+    return {
+        "final_text": last["final_text"],
+        "gates": list(last["gates"]),
+        "report_delta": total_failed_in_attempts,
+    }
+
+
+def _round_node_policy_transition(
+    *,
+    round_idx: int,
+    idx: int,
+    status: str,
+    sanction_level: int,
+    total_reports: int,
+    total_views: int,
+    report_delta: int,
+    account_type: str,
+    verified: bool,
+    sort_tab: str,
+) -> dict:
+    next_total_reports = total_reports + report_delta
+    next_total_views = total_views + 3
+
+    score = compute_score(
+        up=1 + (idx % 3),
+        comments=round_idx,
+        views=next_total_views,
+        preserve=1 if idx == 0 else 0,
+        reports=next_total_reports,
+        trust=1,
+        account_type=account_type,
+        sanction_level=sanction_level,
+        sort_tab=sort_tab,
+    )
+
+    severity = 0
+    if report_delta >= 3:
+        severity = 2
+    if report_delta >= 5:
+        severity = 3
+
+    next_status, transition_event = apply_policy_transition(
+        status=status,
+        reports=next_total_reports,
+        severity=severity,
+        appeal=False,
+        account_type=account_type,
+        verified=verified,
+        sanction_level=sanction_level,
+    )
+    next_sanction_level = int(transition_event.get("sanction_level", sanction_level))
+
+    return {
+        "status": next_status,
+        "sanction_level": next_sanction_level,
+        "total_reports": next_total_reports,
+        "total_views": next_total_views,
+        "score": score,
+        "transition_event": transition_event,
+    }
+
+
+def _round_node_emit_logs(
+    *,
+    seed,
+    round_idx: int,
+    persona_id: str,
+    board_id: str,
+    community_id: str,
+    template_id: str,
+    flow_id: str,
+    selected_thread_candidate_id: str,
+    selected_title_pattern: str,
+    selected_trigger_tags: list[str],
+    selected_body_sections: list[str],
+    template_taboos: list[str],
+    account_type: str,
+    sort_tab: str,
+    sanction_level: int,
+    status: str,
+    score: float,
+    stage1_trace: dict,
+    stage2_trace: dict,
+    final_text: str,
+    memory_before: str,
+    memory_entries: list[str],
+    voice_constraints: dict,
+    gates: list[dict],
+    transition_event: dict,
+    report_delta: int,
+    total_reports: int,
+) -> dict:
+    memory_source = _sanitize_for_memory(final_text)
+    memory_entries.append(f"R{round_idx}:{memory_source[:80]}")
+    memory_after = _memory_summary(memory_entries)
+
+    round_row = {
+        "round": round_idx,
+        "persona_id": persona_id,
+        "board_id": board_id,
+        "community_id": community_id,
+        "thread_template_id": template_id,
+        "comment_flow_id": flow_id,
+        "thread_candidate_id": selected_thread_candidate_id,
+        "status": status,
+        "score": score,
+        "title_pattern": selected_title_pattern,
+        "template_trigger_tags": selected_trigger_tags,
+        "flow_body_sections": selected_body_sections,
+        "template_taboos": template_taboos,
+        "account_type": account_type,
+        "sort_tab": sort_tab,
+        "sanction_level": sanction_level,
+        "generation_stage1": stage1_trace,
+        "generation_stage2": stage2_trace,
+        "text": final_text,
+        "memory_before": memory_before,
+        "memory_after": memory_after,
+        "voice_style": voice_constraints.get("sentence_length", "medium"),
+        "round_loop_nodes": list(ROUND_LOOP_NODE_ORDER),
+    }
+    gate_row = {"round": round_idx, "persona_id": persona_id, "gates": gates}
+
+    action_rows = [
+        {
+            "round": round_idx,
+            "action_type": "POST_COMMENT",
+            "actor_id": persona_id,
+            "target_id": seed.seed_id,
+            "status": status,
+            "account_type": account_type,
+        }
+    ]
+    if report_delta > 0:
+        action_rows.append(
+            {
+                "round": round_idx,
+                "action_type": "REPORT",
+                "actor_id": persona_id,
+                "target_id": seed.seed_id,
+                "delta": report_delta,
+                "total_reports": total_reports,
+            }
+        )
+    if transition_event["action_type"] != "NO_OP":
+        action_rows.append(
+            {
+                "round": round_idx,
+                "action_type": transition_event["action_type"],
+                "actor_id": "system",
+                "target_id": seed.seed_id,
+                "prev_status": transition_event["prev_status"],
+                "next_status": transition_event["next_status"],
+                "reason_rule_id": transition_event["reason_rule_id"],
+                "sanction_level": sanction_level,
+                "status": status,
+            }
+        )
+
+    return {
+        "round_row": round_row,
+        "gate_row": gate_row,
+        "action_rows": action_rows,
+        "memory_after": memory_after,
+    }
+
+
+def extract_stage_payloads(sim_result: dict) -> SimulationStagePayloads:
     persona_memory = sim_result.get("persona_memory", {})
     if isinstance(persona_memory, dict):
         persona_memory_copy = {str(k): list(v) for k, v in persona_memory.items() if isinstance(v, list)}
@@ -297,7 +577,7 @@ def extract_stage_payloads(sim_result: dict) -> dict[str, dict]:
     }
 
 
-def assemble_sim_result_from_stage_payloads(stage_payloads: dict[str, dict]) -> dict:
+def assemble_sim_result_from_stage_payloads(stage_payloads: SimulationStagePayloads | dict[str, dict]) -> dict:
     thread_payload = dict(stage_payloads.get("thread_candidate", {}))
     round_payload = dict(stage_payloads.get("round_loop", {}))
     moderation_payload = dict(stage_payloads.get("moderation", {}))
@@ -379,154 +659,78 @@ def run_simulation(
             voice_constraints = dict(render_voice(persona_id, seed.zone_id, packs=packs))
             base_taboos = _as_str_list(voice_constraints.get("taboo_words"))
             voice_constraints["taboo_words"] = _unique(base_taboos + template_taboos)
-            reset_last_generation_trace()
-            text = generate_comment(
-                seed,
-                persona_id,
+
+            generated = _round_node_generate_comment(
+                seed=seed,
+                persona_id=persona_id,
                 round_idx=round_idx,
-                memory_hint=memory_before,
+                memory_before=memory_before,
                 voice_constraints=voice_constraints,
-                template_context={
-                    "title_pattern": selected_title_pattern,
-                    "trigger_tags": selected_trigger_tags,
-                    "taboos": template_taboos,
-                },
-                flow_context={
-                    "body_sections": selected_body_sections,
-                },
+                selected_title_pattern=selected_title_pattern,
+                selected_trigger_tags=selected_trigger_tags,
+                template_taboos=template_taboos,
+                selected_body_sections=selected_body_sections,
             )
-            generation_trace = pop_last_generation_trace() or {}
-            stage1_trace = generation_trace.get(
-                "stage1",
-                {
-                    "claim": "",
-                    "evidence": "",
-                    "intent": "",
-                    "dial": "",
-                    "title_pattern": "",
-                    "trigger_tags": [],
-                    "body_sections": [],
-                    "template_taboos": [],
-                },
+            gated = _round_node_gate_retry(
+                text=str(generated["text"]),
+                corpus=corpus,
+                max_retries=max_retries,
             )
-            stage2_trace = generation_trace.get(
-                "stage2",
-                {
-                    "voice_hint": "",
-                    "prompt": "",
-                    "sections": [],
-                    "trigger_tags": [],
-                },
-            )
-            last = None
-            total_failed_in_attempts = 0
-
-            for _ in range(max_retries + 1):
-                last = run_gates(text, corpus=corpus)
-                failed_in_attempt = [gate for gate in last["gates"] if not gate["passed"]]
-                total_failed_in_attempts += len(failed_in_attempt)
-                if not failed_in_attempt:
-                    break
-                text = last["final_text"]
-
-            assert last is not None
-            report_delta = total_failed_in_attempts
-            total_reports += report_delta
-            total_views += 3
-            score = compute_score(
-                up=1 + (idx % 3),
-                comments=round_idx,
-                views=total_views,
-                preserve=1 if idx == 0 else 0,
-                reports=total_reports,
-                trust=1,
-                account_type=account_type,
-                sanction_level=sanction_level,
-                sort_tab=sort_tab,
-            )
-            severity = 0
-            if report_delta >= 3:
-                severity = 2
-            if report_delta >= 5:
-                severity = 3
-            status, transition_event = apply_policy_transition(
+            transitioned = _round_node_policy_transition(
+                round_idx=round_idx,
+                idx=idx,
                 status=status,
-                reports=total_reports,
-                severity=severity,
-                appeal=False,
+                sanction_level=sanction_level,
+                total_reports=total_reports,
+                total_views=total_views,
+                report_delta=int(gated["report_delta"]),
                 account_type=account_type,
                 verified=verified,
-                sanction_level=sanction_level,
+                sort_tab=sort_tab,
             )
-            sanction_level = int(transition_event.get("sanction_level", sanction_level))
+            status = str(transitioned["status"])
+            sanction_level = int(transitioned["sanction_level"])
+            total_reports = int(transitioned["total_reports"])
+            total_views = int(transitioned["total_views"])
+            score = float(transitioned["score"])
+            transition_event = dict(transitioned["transition_event"])
+            report_delta = int(gated["report_delta"])
 
             memory_entries = persona_memory.setdefault(persona_id, [])
-            memory_source = _sanitize_for_memory(last["final_text"])
-            memory_entries.append(f"R{round_idx}:{memory_source[:80]}")
-            memory_after = _memory_summary(memory_entries)
+            emitted = _round_node_emit_logs(
+                seed=seed,
+                round_idx=round_idx,
+                persona_id=persona_id,
+                board_id=seed.board_id,
+                community_id=community_id,
+                template_id=template_id,
+                flow_id=flow_id,
+                selected_thread_candidate_id=str(selected_thread.get("candidate_id", "TC-0")),
+                selected_title_pattern=selected_title_pattern,
+                selected_trigger_tags=selected_trigger_tags,
+                selected_body_sections=selected_body_sections,
+                template_taboos=template_taboos,
+                account_type=account_type,
+                sort_tab=sort_tab,
+                sanction_level=sanction_level,
+                status=status,
+                score=score,
+                stage1_trace=dict(generated["stage1_trace"]),
+                stage2_trace=dict(generated["stage2_trace"]),
+                final_text=str(gated["final_text"]),
+                memory_before=memory_before,
+                memory_entries=memory_entries,
+                voice_constraints=voice_constraints,
+                gates=list(gated["gates"]),
+                transition_event=transition_event,
+                report_delta=report_delta,
+                total_reports=total_reports,
+            )
+            round_logs.append(dict(emitted["round_row"]))
+            gate_logs.append(dict(emitted["gate_row"]))
+            action_logs.extend(list(emitted["action_rows"]))
 
-            round_logs.append(
-                {
-                    "round": round_idx,
-                    "persona_id": persona_id,
-                    "board_id": seed.board_id,
-                    "community_id": community_id,
-                    "thread_template_id": template_id,
-                    "comment_flow_id": flow_id,
-                    "thread_candidate_id": selected_thread.get("candidate_id", "TC-0"),
-                    "status": status,
-                    "score": score,
-                    "title_pattern": selected_title_pattern,
-                    "template_trigger_tags": selected_trigger_tags,
-                    "flow_body_sections": selected_body_sections,
-                    "template_taboos": template_taboos,
-                    "account_type": account_type,
-                    "sort_tab": sort_tab,
-                    "sanction_level": sanction_level,
-                    "generation_stage1": stage1_trace,
-                    "generation_stage2": stage2_trace,
-                    "text": last["final_text"],
-                    "memory_before": memory_before,
-                    "memory_after": memory_after,
-                    "voice_style": voice_constraints.get("sentence_length", "medium"),
-                }
-            )
-            gate_logs.append({"round": round_idx, "persona_id": persona_id, "gates": last["gates"]})
-            action_logs.append(
-                {
-                    "round": round_idx,
-                    "action_type": "POST_COMMENT",
-                    "actor_id": persona_id,
-                    "target_id": seed.seed_id,
-                    "status": status,
-                    "account_type": account_type,
-                }
-            )
-            if report_delta > 0:
-                action_logs.append(
-                    {
-                        "round": round_idx,
-                        "action_type": "REPORT",
-                        "actor_id": persona_id,
-                        "target_id": seed.seed_id,
-                        "delta": report_delta,
-                        "total_reports": total_reports,
-                    }
-                )
             if transition_event["action_type"] != "NO_OP":
-                action_logs.append(
-                    {
-                        "round": round_idx,
-                        "action_type": transition_event["action_type"],
-                        "actor_id": "system",
-                        "target_id": seed.seed_id,
-                        "prev_status": transition_event["prev_status"],
-                        "next_status": transition_event["next_status"],
-                        "reason_rule_id": transition_event["reason_rule_id"],
-                        "sanction_level": sanction_level,
-                        "status": status,
-                    }
-                )
                 round_action = transition_event["action_type"]
                 round_reason_rule_id = transition_event["reason_rule_id"]
 
