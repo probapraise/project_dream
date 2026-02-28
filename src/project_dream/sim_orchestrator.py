@@ -147,8 +147,11 @@ def run_simulation(
         count=3,
     )
     selected_thread = _select_thread_candidate(thread_candidates)
+    account_type_cycle = ("public", "alias", "mask")
+    sort_tab_cycle = ("latest", "weekly_hot", "evidence_first", "preserve_first")
 
     status = "visible"
+    sanction_level = 0
     total_reports = 0
     total_views = 0
     last_processed_round = 0
@@ -163,6 +166,9 @@ def run_simulation(
         participants = select_participants(seed, round_idx=round_idx, packs=packs)[:3]
 
         for idx, persona_id in enumerate(participants):
+            account_type = account_type_cycle[idx % len(account_type_cycle)]
+            verified = account_type == "public"
+            sort_tab = sort_tab_cycle[(round_idx - 1) % len(sort_tab_cycle)]
             before_entries = persona_memory.get(persona_id, [])
             memory_before = _memory_summary(before_entries)
             voice_constraints = render_voice(persona_id, seed.zone_id, packs=packs)
@@ -195,6 +201,9 @@ def run_simulation(
                 preserve=1 if idx == 0 else 0,
                 reports=total_reports,
                 trust=1,
+                account_type=account_type,
+                sanction_level=sanction_level,
+                sort_tab=sort_tab,
             )
             severity = 0
             if report_delta >= 3:
@@ -206,7 +215,11 @@ def run_simulation(
                 reports=total_reports,
                 severity=severity,
                 appeal=False,
+                account_type=account_type,
+                verified=verified,
+                sanction_level=sanction_level,
             )
+            sanction_level = int(transition_event.get("sanction_level", sanction_level))
 
             memory_entries = persona_memory.setdefault(persona_id, [])
             memory_source = _sanitize_for_memory(last["final_text"])
@@ -224,6 +237,9 @@ def run_simulation(
                     "thread_candidate_id": selected_thread.get("candidate_id", "TC-0"),
                     "status": status,
                     "score": score,
+                    "account_type": account_type,
+                    "sort_tab": sort_tab,
+                    "sanction_level": sanction_level,
                     "text": last["final_text"],
                     "memory_before": memory_before,
                     "memory_after": memory_after,
@@ -238,6 +254,7 @@ def run_simulation(
                     "actor_id": persona_id,
                     "target_id": seed.seed_id,
                     "status": status,
+                    "account_type": account_type,
                 }
             )
             if report_delta > 0:
@@ -261,6 +278,7 @@ def run_simulation(
                         "prev_status": transition_event["prev_status"],
                         "next_status": transition_event["next_status"],
                         "reason_rule_id": transition_event["reason_rule_id"],
+                        "sanction_level": sanction_level,
                         "status": status,
                     }
                 )
@@ -280,6 +298,7 @@ def run_simulation(
                 "status_before": round_status_before,
                 "status_after": status,
                 "report_total": total_reports,
+                "sanction_level": sanction_level,
             }
         )
 
@@ -310,6 +329,7 @@ def run_simulation(
             "thread_template_id": template_id,
             "comment_flow_id": flow_id,
             "status": status,
+            "sanction_level": sanction_level,
             "total_reports": total_reports,
             "termination_reason": termination_reason,
             "ended_round": last_processed_round,
