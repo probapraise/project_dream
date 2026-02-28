@@ -22,7 +22,7 @@ class _FakeHTTPResponse:
 
 
 def test_build_default_llm_client_falls_back_to_echo(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.delenv("PROJECT_DREAM_LLM_PROVIDER", raising=False)
+    monkeypatch.setenv("PROJECT_DREAM_LLM_PROVIDER", "echo")
     monkeypatch.delenv("PROJECT_DREAM_LLM_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
