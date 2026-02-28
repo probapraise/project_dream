@@ -68,6 +68,7 @@ def test_cli_regress_live_temporarily_overrides_llm_env(monkeypatch: pytest.Monk
     assert seen["timeout"] == "60"
     assert seen["kwargs"]["max_seeds"] == 2
     assert seen["kwargs"]["metric_set"] == "v2"
+    assert seen["kwargs"]["corpus_dir"] == Path("corpus")
 
     assert cli.os.environ.get("PROJECT_DREAM_LLM_PROVIDER") == "echo"
     assert cli.os.environ.get("PROJECT_DREAM_LLM_MODEL") == "old-model"

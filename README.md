@@ -7,6 +7,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e .
 pytest -q
+python -m project_dream.cli ingest --packs-dir packs --corpus-dir corpus
 python -m project_dream.cli simulate --seed examples/seeds/seed_001.json --output-dir runs --rounds 3
 python -m project_dream.cli evaluate --runs-dir runs --metric-set v2
 python -m project_dream.cli regress --seeds-dir examples/seeds/regression --output-dir runs --max-seeds 10
@@ -31,6 +32,24 @@ cp .env.example .env
 ```
 
 `.env`에서 `PROJECT_DREAM_HOST/PORT/RUNS_DIR/PACKS_DIR`를 조정하면 환경이 바뀌어도 같은 명령으로 서버 실행/검증이 가능합니다.
+
+### Corpus Build (Ingest)
+
+`ingest` 명령은 pack 데이터를 기준으로 유사도/레퍼런스 코퍼스를 생성합니다.
+
+```bash
+python -m project_dream.cli ingest --packs-dir packs --corpus-dir corpus
+```
+
+생성 파일:
+
+- `corpus/reference.jsonl`
+- `corpus/refined.jsonl`
+- `corpus/generated.jsonl`
+- `corpus/manifest.json`
+
+`simulate`, `regress`, `regress-live`는 기본적으로 `corpus/`를 자동 로드해 context corpus에 병합합니다.
+다른 경로를 쓰려면 각 명령에 `--corpus-dir <path>`를 지정하면 됩니다.
 
 ### Run Tests With Gemini 3.1 Flash
 

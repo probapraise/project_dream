@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from project_dream.app_service import evaluate_and_persist, simulate_and_persist
+from project_dream.data_ingest import build_corpus_from_packs
 from project_dream.infra.http_server import serve
 from project_dream.infra.store import FileRunRepository
 from project_dream.infra.web_api import ProjectDreamAPI
@@ -126,8 +127,13 @@ def build_parser() -> argparse.ArgumentParser:
     sim = sub.add_parser("simulate")
     sim.add_argument("--seed", required=True)
     sim.add_argument("--packs-dir", required=False, default="packs")
+    sim.add_argument("--corpus-dir", required=False, default="corpus")
     sim.add_argument("--output-dir", required=False, default="runs")
     sim.add_argument("--rounds", type=int, default=3)
+
+    ingest = sub.add_parser("ingest")
+    ingest.add_argument("--packs-dir", required=False, default="packs")
+    ingest.add_argument("--corpus-dir", required=False, default="corpus")
 
     eva = sub.add_parser("evaluate")
     eva.add_argument("--runs-dir", required=False, default="runs")
@@ -137,6 +143,7 @@ def build_parser() -> argparse.ArgumentParser:
     reg = sub.add_parser("regress")
     reg.add_argument("--seeds-dir", required=False, default="examples/seeds/regression")
     reg.add_argument("--packs-dir", required=False, default="packs")
+    reg.add_argument("--corpus-dir", required=False, default="corpus")
     reg.add_argument("--output-dir", required=False, default="runs")
     reg.add_argument("--rounds", type=int, default=4)
     reg.add_argument("--max-seeds", type=int, default=10)
@@ -149,6 +156,7 @@ def build_parser() -> argparse.ArgumentParser:
     reg_live = sub.add_parser("regress-live")
     reg_live.add_argument("--seeds-dir", required=False, default="examples/seeds/regression")
     reg_live.add_argument("--packs-dir", required=False, default="packs")
+    reg_live.add_argument("--corpus-dir", required=False, default="corpus")
     reg_live.add_argument("--output-dir", required=False, default="runs")
     reg_live.add_argument("--rounds", type=int, default=3)
     reg_live.add_argument("--max-seeds", type=int, default=2)
@@ -189,8 +197,15 @@ def main(argv: list[str] | None = None) -> int:
             seed,
             rounds=args.rounds,
             packs_dir=Path(args.packs_dir),
+            corpus_dir=Path(args.corpus_dir),
             repository=repository,
         )
+    elif args.command == "ingest":
+        summary = build_corpus_from_packs(
+            packs_dir=Path(args.packs_dir),
+            corpus_dir=Path(args.corpus_dir),
+        )
+        print(json.dumps(summary, ensure_ascii=False))
     elif args.command == "evaluate":
         repository = FileRunRepository(Path(args.runs_dir))
         evaluate_and_persist(
@@ -202,6 +217,7 @@ def main(argv: list[str] | None = None) -> int:
         summary = run_regression_batch(
             seeds_dir=Path(args.seeds_dir),
             packs_dir=Path(args.packs_dir),
+            corpus_dir=Path(args.corpus_dir),
             output_dir=Path(args.output_dir),
             rounds=args.rounds,
             max_seeds=args.max_seeds,
@@ -225,6 +241,7 @@ def main(argv: list[str] | None = None) -> int:
             summary = run_regression_batch(
                 seeds_dir=Path(args.seeds_dir),
                 packs_dir=Path(args.packs_dir),
+                corpus_dir=Path(args.corpus_dir),
                 output_dir=Path(args.output_dir),
                 rounds=args.rounds,
                 max_seeds=args.max_seeds,

@@ -108,6 +108,7 @@ def test_run_regression_batch_uses_retrieved_context_corpus(
         seeds_dir=seeds_dir,
         packs_dir=Path("packs"),
         output_dir=tmp_path / "runs",
+        corpus_dir=tmp_path / "missing-corpus",
         rounds=3,
         max_seeds=1,
         metric_set="v1",
@@ -119,3 +120,59 @@ def test_run_regression_batch_uses_retrieved_context_corpus(
 
     assert captured_corpora
     assert captured_corpora[0] == ["ctx-B07-D"]
+
+
+def test_run_regression_batch_merges_ingested_corpus(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    seeds_dir = tmp_path / "seeds"
+    seeds_dir.mkdir(parents=True, exist_ok=True)
+    _write_seed(seeds_dir / "seed_001.json", "SEED-R-CONTEXT-002", "B07", "D")
+
+    corpus_dir = tmp_path / "corpus"
+    corpus_dir.mkdir(parents=True, exist_ok=True)
+    (corpus_dir / "reference.jsonl").write_text(
+        '{"text":"ctx-reference"}\n{"text":"ctx-B07-D"}\n',
+        encoding="utf-8",
+    )
+    (corpus_dir / "refined.jsonl").write_text('{"text":"ctx-refined"}\n', encoding="utf-8")
+    (corpus_dir / "generated.jsonl").write_text("", encoding="utf-8")
+
+    captured_corpora: list[list[str]] = []
+    original_run_simulation = regression_runner.run_simulation
+
+    def spy_run_simulation(*, seed, rounds, corpus, max_retries=2, packs=None):
+        captured_corpora.append(list(corpus))
+        return original_run_simulation(
+            seed=seed,
+            rounds=rounds,
+            corpus=corpus,
+            max_retries=max_retries,
+            packs=packs,
+        )
+
+    monkeypatch.setattr(regression_runner, "run_simulation", spy_run_simulation)
+    monkeypatch.setattr(regression_runner, "build_index", lambda packs: {"fake": "index"}, raising=False)
+    monkeypatch.setattr(
+        regression_runner,
+        "retrieve_context",
+        lambda index, **kwargs: {"bundle": {}, "corpus": [f"ctx-{kwargs['board_id']}-{kwargs['zone_id']}"]},
+        raising=False,
+    )
+
+    run_regression_batch(
+        seeds_dir=seeds_dir,
+        packs_dir=Path("packs"),
+        output_dir=tmp_path / "runs",
+        rounds=3,
+        max_seeds=1,
+        metric_set="v1",
+        min_community_coverage=1,
+        min_conflict_frame_runs=0,
+        min_moderation_hook_runs=0,
+        min_validation_warning_runs=0,
+        corpus_dir=corpus_dir,
+    )
+
+    assert captured_corpora
+    assert captured_corpora[0] == ["ctx-B07-D", "ctx-reference", "ctx-refined"]

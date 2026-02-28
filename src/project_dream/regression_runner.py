@@ -2,6 +2,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+from project_dream.data_ingest import load_corpus_texts
 from project_dream.eval_suite import REQUIRED_REPORT_KEYS, evaluate_run
 from project_dream.kb_index import build_index, retrieve_context
 from project_dream.models import SeedInput
@@ -17,6 +18,19 @@ MODERATION_ACTIONS = {
     "GHOST_THREAD",
     "SANCTION_USER",
 }
+
+
+def _merge_unique_corpus(*groups: list[str]) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for rows in groups:
+        for raw in rows:
+            text = str(raw).strip()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            merged.append(text)
+    return merged
 
 
 def _seed_files(seeds_dir: Path, max_seeds: int) -> list[Path]:
@@ -87,6 +101,7 @@ def run_regression_batch(
     seeds_dir: Path,
     packs_dir: Path,
     output_dir: Path,
+    corpus_dir: Path = Path("corpus"),
     rounds: int = 4,
     max_seeds: int = 10,
     metric_set: str = "v1",
@@ -97,6 +112,7 @@ def run_regression_batch(
 ) -> dict:
     packs = load_packs(packs_dir, enforce_phase1_minimums=True)
     index = build_index(packs)
+    ingested_corpus = load_corpus_texts(corpus_dir)
     seed_files = _seed_files(seeds_dir, max_seeds=max_seeds)
 
     run_summaries: list[dict] = []
@@ -123,14 +139,15 @@ def run_regression_batch(
             persona_ids=[],
             top_k=3,
         )
+        merged_corpus = _merge_unique_corpus(context["corpus"], ingested_corpus)
         sim_result = run_simulation(
             seed=seed,
             rounds=rounds,
-            corpus=context["corpus"],
+            corpus=merged_corpus,
             packs=packs,
         )
         sim_result["context_bundle"] = context["bundle"]
-        sim_result["context_corpus"] = context["corpus"]
+        sim_result["context_corpus"] = merged_corpus
         report = build_report_v1(seed, sim_result, packs)
         run_dir = persist_run(output_dir, sim_result, report)
         eval_result = evaluate_run(run_dir, metric_set=metric_set)
@@ -208,6 +225,7 @@ def run_regression_batch(
         "config": {
             "seeds_dir": str(seeds_dir),
             "packs_dir": str(packs_dir),
+            "corpus_dir": str(corpus_dir),
             "output_dir": str(output_dir),
             "rounds": rounds,
             "max_seeds": max_seeds,

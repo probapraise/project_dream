@@ -67,3 +67,66 @@ def test_simulate_and_persist_passes_retrieved_corpus(
     assert captured["rounds"] == 3
     assert captured["corpus"]
     assert any("장터기둥" in row or "B07" in row for row in captured["corpus"])
+
+
+def test_simulate_and_persist_merges_ingested_corpus(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    captured: dict = {}
+
+    def fake_run_simulation(*, seed, rounds, corpus, max_retries=2, packs=None):
+        captured["corpus"] = list(corpus)
+        return {
+            "rounds": [],
+            "gate_logs": [],
+            "action_logs": [],
+            "thread_state": {
+                "board_id": seed.board_id,
+                "community_id": "COM-PLZ-004",
+                "thread_template_id": "T1",
+                "comment_flow_id": "P1",
+                "status": "visible",
+                "total_reports": 0,
+            },
+        }
+
+    monkeypatch.setattr(app_service, "run_simulation", fake_run_simulation)
+    monkeypatch.setattr(
+        app_service,
+        "build_report_v1",
+        lambda seed, sim_result, packs: {"schema_version": "report.v1", "seed_id": seed.seed_id},
+    )
+    monkeypatch.setattr(
+        app_service,
+        "retrieve_context",
+        lambda index, **kwargs: {"bundle": {}, "corpus": ["ctx-retrieved"]},
+        raising=False,
+    )
+
+    corpus_dir = tmp_path / "corpus"
+    corpus_dir.mkdir(parents=True, exist_ok=True)
+    (corpus_dir / "reference.jsonl").write_text(
+        '{"text":"ctx-reference"}\n{"text":"ctx-retrieved"}\n',
+        encoding="utf-8",
+    )
+    (corpus_dir / "refined.jsonl").write_text('{"text":"ctx-refined"}\n', encoding="utf-8")
+    (corpus_dir / "generated.jsonl").write_text("", encoding="utf-8")
+
+    seed = SeedInput(
+        seed_id="SEED-KB-002",
+        title="장터 분쟁",
+        summary="거래 사기 의혹이 확산되는 사건",
+        board_id="B07",
+        zone_id="D",
+    )
+    repo = _FakeRepository(tmp_path / "runs")
+
+    app_service.simulate_and_persist(
+        seed=seed,
+        rounds=3,
+        packs_dir=Path("packs"),
+        repository=repo,
+        corpus_dir=corpus_dir,
+    )
+
+    assert captured["corpus"] == ["ctx-retrieved", "ctx-reference", "ctx-refined"]

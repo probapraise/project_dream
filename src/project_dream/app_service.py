@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from project_dream.data_ingest import load_corpus_texts
 from project_dream.eval_suite import evaluate_run
 from project_dream.infra.store import RunRepository
 from project_dream.kb_index import build_index, retrieve_context
@@ -10,12 +11,26 @@ from project_dream.report_generator import build_report_v1
 from project_dream.sim_orchestrator import run_simulation
 
 
+def _merge_unique_corpus(*groups: list[str]) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for rows in groups:
+        for raw in rows:
+            text = str(raw).strip()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            merged.append(text)
+    return merged
+
+
 def simulate_and_persist(
     seed: SeedInput,
     *,
     rounds: int,
     packs_dir: Path,
     repository: RunRepository,
+    corpus_dir: Path = Path("corpus"),
 ) -> Path:
     packs = load_packs(packs_dir, enforce_phase1_minimums=True)
     index = build_index(packs)
@@ -28,9 +43,11 @@ def simulate_and_persist(
         persona_ids=[],
         top_k=3,
     )
-    sim_result = run_simulation(seed=seed, rounds=rounds, corpus=context["corpus"], packs=packs)
+    ingested_corpus = load_corpus_texts(corpus_dir)
+    merged_corpus = _merge_unique_corpus(context["corpus"], ingested_corpus)
+    sim_result = run_simulation(seed=seed, rounds=rounds, corpus=merged_corpus, packs=packs)
     sim_result["context_bundle"] = context["bundle"]
-    sim_result["context_corpus"] = context["corpus"]
+    sim_result["context_corpus"] = merged_corpus
     report = build_report_v1(seed, sim_result, packs)
     return repository.persist_run(sim_result, report)
 
@@ -51,6 +68,7 @@ def regress_and_persist(
     *,
     repository: RunRepository,
     packs_dir: Path,
+    corpus_dir: Path = Path("corpus"),
     seeds_dir: Path = Path("examples/seeds/regression"),
     rounds: int = 4,
     max_seeds: int = 10,
@@ -63,6 +81,7 @@ def regress_and_persist(
     return run_regression_batch(
         seeds_dir=seeds_dir,
         packs_dir=packs_dir,
+        corpus_dir=corpus_dir,
         output_dir=repository.runs_dir,
         rounds=rounds,
         max_seeds=max_seeds,

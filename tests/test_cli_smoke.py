@@ -8,6 +8,22 @@ def test_cli_supports_simulate_command():
     args = parser.parse_args(["simulate", "--seed", "seed.json"])
     assert args.command == "simulate"
     assert args.seed == "seed.json"
+    assert args.corpus_dir == "corpus"
+
+
+def test_cli_supports_ingest_command():
+    parser = build_parser()
+    args = parser.parse_args(["ingest"])
+    assert args.command == "ingest"
+    assert args.packs_dir == "packs"
+    assert args.corpus_dir == "corpus"
+
+
+def test_cli_supports_regress_command():
+    parser = build_parser()
+    args = parser.parse_args(["regress"])
+    assert args.command == "regress"
+    assert args.corpus_dir == "corpus"
 
 
 def test_cli_supports_regress_live_command_with_defaults():
@@ -16,6 +32,7 @@ def test_cli_supports_regress_live_command_with_defaults():
     assert args.command == "regress-live"
     assert args.seeds_dir == "examples/seeds/regression"
     assert args.output_dir == "runs"
+    assert args.corpus_dir == "corpus"
     assert args.max_seeds == 2
     assert args.metric_set == "v2"
     assert args.llm_model == "gemini-3.1-flash"
