@@ -15,8 +15,17 @@ REQUIRED_REPORT_KEYS = {
     "dialogue_candidates",
     "foreshadowing",
     "risk_checks",
+    "story_checklist",
 }
 VALID_RISK_SEVERITIES = {"low", "medium", "high"}
+REQUIRED_STORY_CHECKLIST_KEYS = {
+    "countdown_risk",
+    "evidence_grade",
+    "board_migration_clue",
+    "meme",
+    "event_card",
+}
+VALID_STORY_CHECKLIST_STATUSES = {"ok", "risk", "missing"}
 REQUIRED_STAGE_EVENT_TYPES = {
     "thread_candidate",
     "thread_selected",
@@ -188,6 +197,41 @@ def _report_quality_checks_v1(report: dict) -> list[EvalCheck]:
             name="report.risk_checks.severity_values",
             passed=len(invalid_severity_indices) == 0 and isinstance(risk_checks, list),
             details=f"invalid_indices={invalid_severity_indices}",
+        )
+    )
+
+    story_checklist = report.get("story_checklist", {})
+    missing_story_items: list[str] = []
+    invalid_story_items: list[str] = []
+    if not isinstance(story_checklist, dict):
+        missing_story_items = sorted(REQUIRED_STORY_CHECKLIST_KEYS)
+        invalid_story_items.append("story_checklist_not_dict")
+    else:
+        for key in sorted(REQUIRED_STORY_CHECKLIST_KEYS):
+            if key not in story_checklist:
+                missing_story_items.append(key)
+                continue
+            item = story_checklist.get(key)
+            if not isinstance(item, dict):
+                invalid_story_items.append(f"{key}:not_dict")
+                continue
+            label = str(item.get("label", "")).strip()
+            status = str(item.get("status", "")).strip().lower()
+            details = str(item.get("details", "")).strip()
+            if not label:
+                invalid_story_items.append(f"{key}:label")
+            if status not in VALID_STORY_CHECKLIST_STATUSES:
+                invalid_story_items.append(f"{key}:status")
+            if not details:
+                invalid_story_items.append(f"{key}:details")
+    checks.append(
+        EvalCheck(
+            name="report.story_checklist.required_items",
+            passed=len(missing_story_items) == 0 and len(invalid_story_items) == 0,
+            details=(
+                f"missing={sorted(missing_story_items)};"
+                f"invalid={sorted(invalid_story_items)}"
+            ),
         )
     )
 
@@ -426,6 +470,12 @@ def evaluate_run(run_dir: Path, metric_set: str = "v1") -> dict:
 
     checks.extend(_report_quality_checks_v1(report))
 
+    story_checklist = report.get("story_checklist", {})
+    if isinstance(story_checklist, dict):
+        story_checklist_present_items = sum(1 for key in REQUIRED_STORY_CHECKLIST_KEYS if key in story_checklist)
+    else:
+        story_checklist_present_items = 0
+
     pass_fail = all(check.passed for check in checks)
     quality_metrics = METRIC_SET_REGISTRY[metric_set](runlog_rows, report)
 
@@ -448,6 +498,7 @@ def evaluate_run(run_dir: Path, metric_set: str = "v1") -> dict:
             "highlight_count": highlight_count,
             "dialogue_count": dialogue_count,
             "lens_count": lens_count,
+            "story_checklist_present_items": story_checklist_present_items,
             **quality_metrics,
         },
     )

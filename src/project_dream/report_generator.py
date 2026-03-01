@@ -192,6 +192,93 @@ def _build_evidence_watch(seed) -> dict:
     }
 
 
+def _build_story_checklist(seed, sim_result: dict, evidence_watch: dict) -> dict:
+    rounds_raw = sim_result.get("rounds", [])
+    rounds = [row for row in rounds_raw if isinstance(row, dict)] if isinstance(rounds_raw, list) else []
+    action_logs_raw = sim_result.get("action_logs", [])
+    action_logs = [row for row in action_logs_raw if isinstance(row, dict)] if isinstance(action_logs_raw, list) else []
+    thread_state = sim_result.get("thread_state", {})
+    if not isinstance(thread_state, dict):
+        thread_state = {}
+
+    board_ids = {
+        str(row.get("board_id", "")).strip()
+        for row in rounds
+        if str(row.get("board_id", "")).strip()
+    }
+    if str(thread_state.get("board_id", "")).strip():
+        board_ids.add(str(thread_state.get("board_id", "")).strip())
+
+    community_ids = {
+        str(row.get("community_id", "")).strip()
+        for row in rounds
+        if str(row.get("community_id", "")).strip()
+    }
+    if str(thread_state.get("community_id", "")).strip():
+        community_ids.add(str(thread_state.get("community_id", "")).strip())
+
+    evidence_grade = str(evidence_watch.get("grade", "B")).strip().upper() or "B"
+    evidence_type = str(evidence_watch.get("type", "log")).strip() or "log"
+    try:
+        expires_in_hours = max(0, int(evidence_watch.get("expires_in_hours", 72)))
+    except (TypeError, ValueError):
+        expires_in_hours = 72
+
+    lock_actions = sum(
+        1 for row in action_logs if str(row.get("action_type", "")).strip() in {"LOCK_THREAD", "GHOST_THREAD"}
+    )
+    countdown_risk = bool(evidence_watch.get("countdown_risk")) or lock_actions > 0
+    board_migration_observed = len(board_ids) >= 2
+
+    first_round = rounds[0] if rounds else {}
+    event_card_id = (
+        str(thread_state.get("event_card_id", "")).strip()
+        or str(first_round.get("event_card_id", "")).strip()
+        or "EV-UNKNOWN"
+    )
+    meme_seed_id = (
+        str(thread_state.get("meme_seed_id", "")).strip()
+        or str(first_round.get("meme_seed_id", "")).strip()
+        or "MM-UNKNOWN"
+    )
+
+    return {
+        "countdown_risk": {
+            "label": "카운트다운/봉문 리스크",
+            "status": "risk" if countdown_risk else "ok",
+            "details": (
+                f"countdown_risk={countdown_risk};"
+                f"expires_in_hours={expires_in_hours};"
+                f"lock_actions={lock_actions}"
+            ),
+        },
+        "evidence_grade": {
+            "label": "증거 등급",
+            "status": "risk" if evidence_grade == "C" else "ok",
+            "details": f"grade={evidence_grade};type={evidence_type}",
+        },
+        "board_migration_clue": {
+            "label": "보드 이동 단서",
+            "status": "risk" if board_migration_observed else "missing",
+            "details": (
+                f"board_ids={sorted(board_ids)};"
+                f"community_ids={sorted(community_ids)};"
+                f"cross_inflow={board_migration_observed}"
+            ),
+        },
+        "meme": {
+            "label": "밈",
+            "status": "ok" if meme_seed_id != "MM-UNKNOWN" else "missing",
+            "details": f"meme_seed_id={meme_seed_id}",
+        },
+        "event_card": {
+            "label": "이벤트 카드",
+            "status": "ok" if event_card_id != "EV-UNKNOWN" else "missing",
+            "details": f"event_card_id={event_card_id}",
+        },
+    }
+
+
 def build_report_v1(
     seed,
     sim_result: dict,
@@ -203,6 +290,7 @@ def build_report_v1(
     round_count = len(sim_result.get("rounds", []))
     constraints = _seed_constraints(seed)
     evidence_watch = _build_evidence_watch(seed)
+    story_checklist = _build_story_checklist(seed, sim_result, evidence_watch)
     risk_checks = _build_risk_checks(sim_result)
     if constraints["forbidden_terms"] or constraints["sensitivity_tags"]:
         risk_checks.append(
@@ -250,6 +338,7 @@ def build_report_v1(
         risk_checks=risk_checks,
         seed_constraints=constraints,
         evidence_watch=evidence_watch,
+        story_checklist=story_checklist,
     )
     payload = report.model_dump()
     payload["report_gate"] = run_report_gate(payload)

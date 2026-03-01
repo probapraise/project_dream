@@ -29,6 +29,20 @@ def test_report_v1_has_required_sections_and_sizes():
     assert len(report["dialogue_candidates"]) <= 5
     assert report["foreshadowing"]
     assert report["risk_checks"]
+    assert "story_checklist" in report
+    required_story_keys = {
+        "countdown_risk",
+        "evidence_grade",
+        "board_migration_clue",
+        "meme",
+        "event_card",
+    }
+    assert required_story_keys.issubset(set(report["story_checklist"].keys()))
+    for key in required_story_keys:
+        item = report["story_checklist"][key]
+        assert item["label"]
+        assert item["details"]
+        assert item["status"] in {"ok", "risk", "missing"}
     assert "report_gate" in report
     assert report["report_gate"]["schema_version"] == "report_gate.v1"
     assert report["report_gate"]["pass_fail"] is True

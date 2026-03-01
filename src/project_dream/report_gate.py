@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from project_dream.eval_suite import REQUIRED_REPORT_KEYS, VALID_RISK_SEVERITIES
+from project_dream.eval_suite import (
+    REQUIRED_REPORT_KEYS,
+    REQUIRED_STORY_CHECKLIST_KEYS,
+    VALID_RISK_SEVERITIES,
+    VALID_STORY_CHECKLIST_STATUSES,
+)
 
 
 def _check(name: str, passed: bool, details: str) -> dict:
@@ -34,6 +39,31 @@ def _risk_severity_valid(risk_checks: object) -> tuple[bool, list[int]]:
         if severity not in VALID_RISK_SEVERITIES:
             invalid_indices.append(idx)
     return len(invalid_indices) == 0, invalid_indices
+
+
+def _story_checklist_valid(story_checklist: object) -> tuple[bool, list[str], list[str]]:
+    missing_items: list[str] = []
+    invalid_items: list[str] = []
+    if not isinstance(story_checklist, dict):
+        return False, sorted(REQUIRED_STORY_CHECKLIST_KEYS), ["story_checklist_not_dict"]
+    for key in sorted(REQUIRED_STORY_CHECKLIST_KEYS):
+        if key not in story_checklist:
+            missing_items.append(key)
+            continue
+        item = story_checklist.get(key)
+        if not isinstance(item, dict):
+            invalid_items.append(f"{key}:not_dict")
+            continue
+        label = str(item.get("label", "")).strip()
+        status = str(item.get("status", "")).strip().lower()
+        details = str(item.get("details", "")).strip()
+        if not label:
+            invalid_items.append(f"{key}:label")
+        if status not in VALID_STORY_CHECKLIST_STATUSES:
+            invalid_items.append(f"{key}:status")
+        if not details:
+            invalid_items.append(f"{key}:details")
+    return len(missing_items) == 0 and len(invalid_items) == 0, missing_items, invalid_items
 
 
 def run_report_gate(report: dict) -> dict:
@@ -100,6 +130,15 @@ def run_report_gate(report: dict) -> dict:
             "report.risk_checks.severity_values",
             risk_valid,
             f"invalid_indices={invalid_risk_indices}",
+        )
+    )
+
+    story_valid, missing_story_items, invalid_story_items = _story_checklist_valid(report.get("story_checklist"))
+    checks.append(
+        _check(
+            "report.story_checklist.required_items",
+            story_valid,
+            f"missing={sorted(missing_story_items)};invalid={sorted(invalid_story_items)}",
         )
     )
 

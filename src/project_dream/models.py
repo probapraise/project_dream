@@ -63,6 +63,7 @@ class ReportV1(BaseModel):
     risk_checks: list[ReportRiskCheck]
     seed_constraints: dict = Field(default_factory=dict)
     evidence_watch: dict = Field(default_factory=dict)
+    story_checklist: dict = Field(default_factory=dict)
 
 
 class EvalCheck(BaseModel):

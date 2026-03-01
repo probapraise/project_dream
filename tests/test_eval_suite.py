@@ -82,6 +82,13 @@ def _write_valid_run(run_dir: Path) -> None:
         ],
         "foreshadowing": ["f1"],
         "risk_checks": [{"category": "rule", "severity": "low", "details": "ok"}],
+        "story_checklist": {
+            "countdown_risk": {"label": "카운트다운", "status": "ok", "details": "expires_in_hours=48"},
+            "evidence_grade": {"label": "증거 등급", "status": "ok", "details": "grade=B"},
+            "board_migration_clue": {"label": "보드 이동", "status": "missing", "details": "board_ids=['B01']"},
+            "meme": {"label": "밈", "status": "ok", "details": "meme_seed_id=MM-001"},
+            "event_card": {"label": "이벤트", "status": "ok", "details": "event_card_id=EV-001"},
+        },
     }
     (run_dir / "report.json").write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
 
@@ -96,6 +103,9 @@ def test_evaluate_run_passes_on_valid_structure(tmp_path: Path):
     assert result["seed_id"] == "SEED-001"
     assert result["checks"]
     assert result["metrics"]["stage_trace_coverage_rate"] == 1.0
+    checks = {item["name"]: item["passed"] for item in result["checks"]}
+    assert checks["report.story_checklist.required_items"] is True
+    assert result["metrics"]["story_checklist_present_items"] == 5
 
 
 def test_evaluate_run_fails_on_missing_required_sections(tmp_path: Path):

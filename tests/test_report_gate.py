@@ -27,6 +27,13 @@ def _valid_report() -> dict:
         ],
         "foreshadowing": ["f1"],
         "risk_checks": [{"category": "rule", "severity": "low", "details": "ok"}],
+        "story_checklist": {
+            "countdown_risk": {"label": "카운트다운", "status": "ok", "details": "expires_in_hours=48"},
+            "evidence_grade": {"label": "증거 등급", "status": "ok", "details": "grade=B"},
+            "board_migration_clue": {"label": "보드 이동", "status": "missing", "details": "board_ids=['B07']"},
+            "meme": {"label": "밈", "status": "ok", "details": "meme_seed_id=MM-001"},
+            "event_card": {"label": "이벤트", "status": "ok", "details": "event_card_id=EV-001"},
+        },
     }
 
 
@@ -51,3 +58,14 @@ def test_run_report_gate_fails_for_invalid_dialogue_and_risk_severity():
     assert "report.dialogue_count" in failed
     assert "report.dialogue_candidate_fields" in failed
     assert "report.risk_checks.severity_values" in failed
+
+
+def test_run_report_gate_fails_when_story_checklist_missing():
+    report = _valid_report()
+    report.pop("story_checklist")
+
+    gate = run_report_gate(report)
+
+    assert gate["pass_fail"] is False
+    failed = {item["name"] for item in gate["failed_checks"]}
+    assert "report.story_checklist.required_items" in failed

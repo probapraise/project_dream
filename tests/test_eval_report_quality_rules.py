@@ -62,6 +62,13 @@ def _write_valid_run(run_dir: Path) -> None:
         ],
         "foreshadowing": ["f1"],
         "risk_checks": [{"category": "rule", "severity": "low", "details": "ok"}],
+        "story_checklist": {
+            "countdown_risk": {"label": "카운트다운", "status": "ok", "details": "expires_in_hours=48"},
+            "evidence_grade": {"label": "증거 등급", "status": "ok", "details": "grade=B"},
+            "board_migration_clue": {"label": "보드 이동", "status": "missing", "details": "board_ids=['B01']"},
+            "meme": {"label": "밈", "status": "ok", "details": "meme_seed_id=MM-001"},
+            "event_card": {"label": "이벤트", "status": "ok", "details": "event_card_id=EV-001"},
+        },
     }
     (run_dir / "report.json").write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
 
@@ -77,10 +84,12 @@ def test_evaluate_includes_report_quality_checks(tmp_path: Path):
     assert "report.foreshadowing_count" in checks
     assert "report.dialogue_candidate_fields" in checks
     assert "report.risk_checks.severity_values" in checks
+    assert "report.story_checklist.required_items" in checks
     assert checks["report.conflict_map.mediation_points_count"] is True
     assert checks["report.foreshadowing_count"] is True
     assert checks["report.dialogue_candidate_fields"] is True
     assert checks["report.risk_checks.severity_values"] is True
+    assert checks["report.story_checklist.required_items"] is True
 
 
 def test_evaluate_fails_when_risk_severity_is_invalid(tmp_path: Path):
