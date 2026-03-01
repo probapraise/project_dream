@@ -18,6 +18,29 @@ ROUND_LOOP_NODE_ORDER = (
     "emit_logs",
 )
 
+_DIAL_AXIS_ORDER = ("U", "E", "M", "S", "H")
+_DIAL_AXIS_TO_FLOW = {
+    "U": "P1",
+    "E": "P2",
+    "M": "P4",
+    "S": "P4",
+    "H": "P6",
+}
+_DIAL_AXIS_TO_SORT_TAB = {
+    "U": "latest",
+    "E": "evidence_first",
+    "M": "preserve_first",
+    "S": "preserve_first",
+    "H": "weekly_hot",
+}
+_DIAL_AXIS_NAME_HINTS = {
+    "U": ("속보", "제보", "현장", "유출"),
+    "E": ("팩트", "검증", "로그", "번역"),
+    "M": ("규정", "해석", "논쟁", "중재"),
+    "S": ("규정", "징계", "잠입", "추적"),
+    "H": ("풍자", "리믹스", "밈", "패러디"),
+}
+
 
 class ThreadCandidateStagePayload(TypedDict):
     thread_candidates: list[dict]
@@ -194,15 +217,74 @@ def _select_community_id(seed, packs) -> str:
     return candidates[0]["id"]
 
 
+def _dial_profile(seed) -> dict[str, int]:
+    dial = getattr(seed, "dial", None)
+    if dial is None:
+        return {axis: 0 for axis in _DIAL_AXIS_ORDER}
+    profile: dict[str, int] = {}
+    for axis in _DIAL_AXIS_ORDER:
+        try:
+            profile[axis] = max(0, int(getattr(dial, axis, 0)))
+        except (TypeError, ValueError):
+            profile[axis] = 0
+    return profile
+
+
+def _dominant_dial_axis(seed) -> str:
+    profile = _dial_profile(seed)
+    ranked = sorted(
+        ((axis, profile.get(axis, 0)) for axis in _DIAL_AXIS_ORDER),
+        key=lambda row: (-row[1], _DIAL_AXIS_ORDER.index(row[0])),
+    )
+    return ranked[0][0] if ranked else "U"
+
+
+def _target_flow_from_dial(seed) -> str:
+    return _DIAL_AXIS_TO_FLOW.get(_dominant_dial_axis(seed), "P1")
+
+
+def _target_sort_tab_from_dial(seed) -> str:
+    return _DIAL_AXIS_TO_SORT_TAB.get(_dominant_dial_axis(seed), "weekly_hot")
+
+
+def _score_template_for_dial(template: dict, *, seed, target_flow_id: str, dominant_axis: str) -> int:
+    score = 0
+    intended_boards = _as_str_list(template.get("intended_boards"))
+    if seed.board_id in intended_boards:
+        score += 20
+    if str(template.get("default_comment_flow", "")).strip() == target_flow_id:
+        score += 100
+    template_name = str(template.get("name", "")).strip()
+    for hint in _DIAL_AXIS_NAME_HINTS.get(dominant_axis, ()):
+        if hint and hint in template_name:
+            score += 5
+    return score
+
+
 def _select_template(seed, packs) -> tuple[str, str]:
     if not packs or not packs.thread_templates:
         return "T1", "P1"
 
     sorted_templates = sorted(packs.thread_templates.values(), key=lambda x: x["id"])
-    for template in sorted_templates:
-        if seed.board_id in template.get("intended_boards", []):
-            return template["id"], template.get("default_comment_flow", "P1")
-    return "T1", "P1"
+    board_candidates = [template for template in sorted_templates if seed.board_id in template.get("intended_boards", [])]
+    candidates = board_candidates or sorted_templates
+    dominant_axis = _dominant_dial_axis(seed)
+    target_flow_id = _target_flow_from_dial(seed)
+    best = sorted(
+        candidates,
+        key=lambda template: (
+            -_score_template_for_dial(
+                template,
+                seed=seed,
+                target_flow_id=target_flow_id,
+                dominant_axis=dominant_axis,
+            ),
+            str(template.get("id", "")),
+        ),
+    )
+    selected_template = best[0] if best else {"id": "T1", "default_comment_flow": "P1"}
+    flow_id = str(selected_template.get("default_comment_flow", "P1")).strip() or "P1"
+    return str(selected_template.get("id", "T1")), flow_id
 
 
 def _select_event_card_id(seed, packs) -> str:
@@ -629,6 +711,9 @@ def _round_node_emit_logs(
     selected_trigger_tags: list[str],
     selected_body_sections: list[str],
     template_taboos: list[str],
+    dial_dominant_axis: str,
+    dial_target_flow_id: str,
+    dial_target_sort_tab: str,
     evidence_grade: str,
     evidence_type: str,
     evidence_hours_left: int,
@@ -668,6 +753,9 @@ def _round_node_emit_logs(
         "template_trigger_tags": selected_trigger_tags,
         "flow_body_sections": selected_body_sections,
         "template_taboos": template_taboos,
+        "dial_dominant_axis": dial_dominant_axis,
+        "dial_target_flow_id": dial_target_flow_id,
+        "dial_target_sort_tab": dial_target_sort_tab,
         "evidence_grade": evidence_grade,
         "evidence_type": evidence_type,
         "evidence_hours_left": evidence_hours_left,
@@ -815,6 +903,9 @@ def run_simulation(
         flow_context.get("body_sections")
     )
     template_taboos = _as_str_list(template_context.get("taboos"))
+    dial_dominant_axis = _dominant_dial_axis(seed)
+    dial_target_flow_id = _target_flow_from_dial(seed)
+    dial_target_sort_tab = _target_sort_tab_from_dial(seed)
     seed_forbidden_terms = _as_str_list(getattr(seed, "forbidden_terms", []))
     seed_sensitivity_tags = _as_str_list(getattr(seed, "sensitivity_tags", []))
     pack_gate_policy = None
@@ -831,7 +922,6 @@ def run_simulation(
         evidence_hours_left = 72
     fired_flow_actions: set[str] = set()
     account_type_cycle = ("public", "alias", "mask")
-    sort_tab_cycle = ("latest", "weekly_hot", "evidence_first", "preserve_first")
 
     status = "visible"
     sanction_level = 0
@@ -851,7 +941,7 @@ def run_simulation(
         for idx, persona_id in enumerate(participants):
             account_type = account_type_cycle[idx % len(account_type_cycle)]
             verified = account_type == "public"
-            sort_tab = sort_tab_cycle[(round_idx - 1) % len(sort_tab_cycle)]
+            sort_tab = dial_target_sort_tab
             before_entries = persona_memory.get(persona_id, [])
             memory_before = _memory_summary(before_entries)
             voice_constraints = dict(render_voice(persona_id, seed.zone_id, packs=packs))
@@ -915,6 +1005,9 @@ def run_simulation(
                 selected_trigger_tags=selected_trigger_tags,
                 selected_body_sections=selected_body_sections,
                 template_taboos=template_taboos,
+                dial_dominant_axis=dial_dominant_axis,
+                dial_target_flow_id=dial_target_flow_id,
+                dial_target_sort_tab=dial_target_sort_tab,
                 evidence_grade=evidence_grade,
                 evidence_type=evidence_type,
                 evidence_hours_left=evidence_hours_left,
@@ -994,6 +1087,9 @@ def run_simulation(
         "title_pattern": selected_title_pattern,
         "trigger_tags": selected_trigger_tags,
         "body_sections": selected_body_sections,
+        "dial_dominant_axis": dial_dominant_axis,
+        "dial_target_flow_id": dial_target_flow_id,
+        "dial_target_sort_tab": dial_target_sort_tab,
         "status": status,
         "sanction_level": sanction_level,
         "total_reports": total_reports,

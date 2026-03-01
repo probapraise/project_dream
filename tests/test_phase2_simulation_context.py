@@ -276,6 +276,42 @@ def test_simulation_tracks_evidence_grade_and_countdown():
     assert first_hour >= last_hour
 
 
+def test_simulation_reflects_dial_weighted_flow_and_sort_tab_selection():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+
+    evidence_seed = SeedInput(
+        seed_id="SEED-DIAL-E-001",
+        title="팩트체크 우선 사건",
+        summary="증거 검증이 핵심인 사건",
+        board_id="B01",
+        zone_id="A",
+        dial={"U": 10, "E": 60, "M": 10, "S": 10, "H": 10},
+    )
+    hype_seed = SeedInput(
+        seed_id="SEED-DIAL-H-001",
+        title="밈 과열 사건",
+        summary="패러디 확산이 핵심인 사건",
+        board_id="B01",
+        zone_id="A",
+        dial={"U": 10, "E": 10, "M": 10, "S": 10, "H": 60},
+    )
+
+    evidence_result = run_simulation(seed=evidence_seed, rounds=2, corpus=["샘플"], packs=packs)
+    hype_result = run_simulation(seed=hype_seed, rounds=2, corpus=["샘플"], packs=packs)
+
+    assert evidence_result["selected_thread"]["comment_flow_id"] == "P2"
+    assert {row["sort_tab"] for row in evidence_result["rounds"]} == {"evidence_first"}
+    assert all(row["dial_dominant_axis"] == "E" for row in evidence_result["rounds"])
+    assert all(row["dial_target_flow_id"] == "P2" for row in evidence_result["rounds"])
+    assert all(row["dial_target_sort_tab"] == "evidence_first" for row in evidence_result["rounds"])
+
+    assert hype_result["selected_thread"]["comment_flow_id"] == "P6"
+    assert {row["sort_tab"] for row in hype_result["rounds"]} == {"weekly_hot"}
+    assert all(row["dial_dominant_axis"] == "H" for row in hype_result["rounds"])
+    assert all(row["dial_target_flow_id"] == "P6" for row in hype_result["rounds"])
+    assert all(row["dial_target_sort_tab"] == "weekly_hot" for row in hype_result["rounds"])
+
+
 def test_simulation_passes_pack_gate_policy_into_gate_pipeline(monkeypatch):
     packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
     seed = SeedInput(

@@ -1,12 +1,19 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Dial(BaseModel):
-    U: int = 30
-    E: int = 25
-    M: int = 15
-    S: int = 15
-    H: int = 15
+    U: int = Field(default=30, ge=0, le=100)
+    E: int = Field(default=25, ge=0, le=100)
+    M: int = Field(default=15, ge=0, le=100)
+    S: int = Field(default=15, ge=0, le=100)
+    H: int = Field(default=15, ge=0, le=100)
+
+    @model_validator(mode="after")
+    def validate_total(self):
+        total = self.U + self.E + self.M + self.S + self.H
+        if total != 100:
+            raise ValueError(f"Dial sum must be 100, got {total}")
+        return self
 
 
 class EpisodeSeed(BaseModel):

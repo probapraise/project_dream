@@ -1,3 +1,6 @@
+import pytest
+from pydantic import ValidationError
+
 from project_dream.models import SeedInput, Dial
 
 
@@ -36,3 +39,8 @@ def test_seed_input_v2_fields_are_supported():
     assert seed.evidence_grade == "A"
     assert seed.evidence_type == "signed_log"
     assert seed.evidence_expiry_hours == 18
+
+
+def test_dial_requires_total_sum_100():
+    with pytest.raises(ValidationError):
+        Dial(U=40, E=30, M=20, S=10, H=10)

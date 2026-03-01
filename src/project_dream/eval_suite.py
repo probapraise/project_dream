@@ -102,11 +102,34 @@ def _quality_metrics_v2(runlog_rows: list[dict], report: dict) -> dict[str, floa
     unique_speakers = len({item.get("speaker") for item in dialogue if item.get("speaker")})
     dialogue_speaker_diversity = unique_speakers / max(1, dialogue_count)
 
+    round_rows = [row for row in runlog_rows if row.get("type") == "round"]
+    dial_flow_total = 0
+    dial_flow_aligned = 0
+    dial_sort_tab_total = 0
+    dial_sort_tab_aligned = 0
+    for row in round_rows:
+        expected_flow_id = str(row.get("dial_target_flow_id", "")).strip()
+        flow_id = str(row.get("comment_flow_id", "")).strip()
+        if expected_flow_id and flow_id:
+            dial_flow_total += 1
+            dial_flow_aligned += int(expected_flow_id == flow_id)
+
+        expected_tab = str(row.get("dial_target_sort_tab", "")).strip()
+        sort_tab = str(row.get("sort_tab", "")).strip()
+        if expected_tab and sort_tab:
+            dial_sort_tab_total += 1
+            dial_sort_tab_aligned += int(expected_tab == sort_tab)
+
+    dial_flow_alignment_rate = dial_flow_aligned / max(1, dial_flow_total)
+    dial_sort_tab_alignment_rate = dial_sort_tab_aligned / max(1, dial_sort_tab_total)
+
     metrics.update(
         {
             "lore_pass_rate": float(round(lore_pass_rate, 4)),
             "moderation_escalation_depth": float(round(moderation_escalation_depth, 4)),
             "dialogue_speaker_diversity": float(round(dialogue_speaker_diversity, 4)),
+            "dial_flow_alignment_rate": float(round(dial_flow_alignment_rate, 4)),
+            "dial_sort_tab_alignment_rate": float(round(dial_sort_tab_alignment_rate, 4)),
         }
     )
     return metrics
