@@ -182,6 +182,38 @@ def _write_regress_live_diff(
     path.write_text(content, encoding="utf-8")
 
 
+def _emit_regress_live_brief_summary(
+    *,
+    status: str,
+    current_metrics: dict[str, float | int],
+    baseline_metrics: dict[str, float | int],
+    failures: list[str],
+) -> None:
+    print(f"[regress-live] diff status: {status}", file=sys.stderr)
+    brief_keys = (
+        "eval_pass_rate",
+        "cross_inflow_rate",
+        "avg_culture_weight",
+    )
+    for key in brief_keys:
+        if key not in current_metrics and key not in baseline_metrics:
+            continue
+        current_raw = current_metrics.get(key)
+        baseline_raw = baseline_metrics.get(key)
+        current_str = _format_metric_value(current_raw)
+        baseline_str = _format_metric_value(baseline_raw)
+        try:
+            delta_str = f"{float(current_raw) - float(baseline_raw):+.4f}"
+        except (TypeError, ValueError):
+            delta_str = "n/a"
+        print(
+            f"[regress-live] {key}: current={current_str} baseline={baseline_str} delta={delta_str}",
+            file=sys.stderr,
+        )
+    if failures:
+        print(f"[regress-live] top failure: {failures[0]}", file=sys.stderr)
+
+
 def _load_json_or_none(path: Path) -> dict | None:
     if not path.exists():
         return None
@@ -526,15 +558,22 @@ def main(argv: list[str] | None = None) -> int:
 
         baseline_payload = _load_json_or_none(baseline_path)
         if baseline_payload is None:
+            failures = [f"baseline not found: {baseline_path}"]
             _write_regress_live_diff(
                 diff_output_path,
                 status="SKIPPED",
                 baseline_path=baseline_path,
                 current_metrics=current_metrics,
                 baseline_metrics={},
-                failures=[f"baseline not found: {baseline_path}"],
+                failures=failures,
                 allowed_rate_drop=args.allowed_rate_drop,
                 allowed_community_drop=args.allowed_community_drop,
+            )
+            _emit_regress_live_brief_summary(
+                status="SKIPPED",
+                current_metrics=current_metrics,
+                baseline_metrics={},
+                failures=failures,
             )
             print(
                 f"[regress-live] baseline not found, skip compare: {baseline_path}",
@@ -563,6 +602,12 @@ def main(argv: list[str] | None = None) -> int:
             failures=failures,
             allowed_rate_drop=args.allowed_rate_drop,
             allowed_community_drop=args.allowed_community_drop,
+        )
+        _emit_regress_live_brief_summary(
+            status=status,
+            current_metrics=current_metrics,
+            baseline_metrics=baseline_metrics,
+            failures=failures,
         )
         print(
             f"[regress-live] diff written: {diff_output_path}",

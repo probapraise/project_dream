@@ -121,7 +121,7 @@ def test_cli_regress_live_updates_baseline_file(monkeypatch: pytest.MonkeyPatch,
 
 
 def test_cli_regress_live_returns_nonzero_when_baseline_degrades(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture
 ):
     baseline = tmp_path / "baseline.json"
     diff_output = tmp_path / "regress-live-diff.md"
@@ -175,6 +175,9 @@ def test_cli_regress_live_returns_nonzero_when_baseline_degrades(
     )
 
     assert rc == 3
+    stderr = capsys.readouterr().err
+    assert "[regress-live] diff status: FAIL" in stderr
+    assert "[regress-live] top failure:" in stderr
     assert diff_output.exists()
     content = diff_output.read_text(encoding="utf-8")
     assert "status: **FAIL**" in content
@@ -278,7 +281,7 @@ def test_cli_regress_live_returns_nonzero_when_cross_inflow_rate_degrades(
 
 
 def test_cli_regress_live_writes_diff_markdown_on_compare_pass(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture
 ):
     baseline = tmp_path / "baseline.json"
     diff_output = tmp_path / "regress-live-diff.md"
@@ -321,6 +324,11 @@ def test_cli_regress_live_writes_diff_markdown_on_compare_pass(
     )
 
     assert rc == 0
+    stderr = capsys.readouterr().err
+    assert "[regress-live] diff status: PASS" in stderr
+    assert "[regress-live] eval_pass_rate:" in stderr
+    assert "[regress-live] cross_inflow_rate:" in stderr
+    assert "[regress-live] avg_culture_weight:" in stderr
     assert diff_output.exists()
     content = diff_output.read_text(encoding="utf-8")
     assert "status: **PASS**" in content
