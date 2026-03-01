@@ -28,6 +28,48 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _minimal_world_master_payload() -> dict:
+    return {
+        "schema_version": "world_master.v1",
+        "version": "1.0.0",
+        "forbidden_terms": ["실명 주소"],
+        "relation_conflict_rules": [],
+        "kind_registry": {
+            "node_kinds": [
+                {
+                    "kind": "character",
+                    "required_attributes": [],
+                    "description": "개별 인물",
+                }
+            ],
+            "edge_kinds": [],
+        },
+        "nodes": [
+            {
+                "id": "WN-CHAR-001",
+                "kind": "character",
+                "name": "주인공",
+                "summary": "테스트 주인공",
+                "tags": ["protagonist"],
+                "aliases": [],
+                "attributes": {"origin": "academy"},
+                "source": "worldbible.v4.3",
+                "valid_from": "Y100",
+                "valid_to": "",
+                "evidence_grade": "A",
+                "visibility": "PUBLIC",
+            }
+        ],
+        "edges": [],
+        "events": [],
+        "rules": [],
+        "glossary": [],
+        "source_documents": [],
+        "claims": [],
+        "taxonomy_terms": [],
+    }
+
+
 def test_compile_world_pack_from_monolithic_source_updates_manifest(tmp_path: Path):
     packs_dir = _copy_packs(tmp_path)
     authoring_dir = tmp_path / "authoring"
@@ -371,3 +413,86 @@ def test_compile_world_pack_from_world_master_schema(tmp_path: Path):
 
     loaded = load_packs(packs_dir)
     assert loaded.world_schema["extensions"]["world_master"]["claims"]
+
+
+def test_compile_world_pack_from_world_master_split_directory(tmp_path: Path):
+    packs_dir = _copy_packs(tmp_path)
+    authoring_dir = tmp_path / "authoring"
+    split_dir = authoring_dir / "world_master"
+    split_dir.mkdir(parents=True, exist_ok=True)
+
+    _write_json(
+        split_dir / "meta.json",
+        {
+            "schema_version": "world_master.v1",
+            "version": "2.1.0",
+            "forbidden_terms": ["실명 주소"],
+            "relation_conflict_rules": [],
+        },
+    )
+    _write_json(
+        split_dir / "kind_registry.json",
+        {
+            "node_kinds": [
+                {"kind": "character", "required_attributes": ["origin"]},
+            ],
+            "edge_kinds": [],
+        },
+    )
+    _write_json(
+        split_dir / "nodes.json",
+        [
+            {
+                "id": "WN-CHAR-001",
+                "kind": "character",
+                "name": "분할 입력 주인공",
+                "summary": "split source",
+                "tags": [],
+                "aliases": [],
+                "attributes": {"origin": "split"},
+                "source": "worldbible.v4.3",
+                "valid_from": "Y150",
+                "valid_to": "",
+                "evidence_grade": "A",
+                "visibility": "PUBLIC",
+            }
+        ],
+    )
+
+    summary = compile_world_pack(authoring_dir=authoring_dir, packs_dir=packs_dir)
+
+    assert summary["source_mode"] == "master_split"
+    compiled_world = _read_json(packs_dir / "world_pack.json")
+    assert compiled_world["version"] == "2.1.0"
+    assert compiled_world["extensions"]["world_master"]["kind_registry"]["node_kinds"]
+
+    # 동시 지원: split 입력 시 단일 파일 export도 동기화되어야 한다.
+    single_path = authoring_dir / "world_master.json"
+    assert single_path.exists()
+    single_payload = _read_json(single_path)
+    assert single_payload["version"] == "2.1.0"
+    assert single_payload["nodes"][0]["name"] == "분할 입력 주인공"
+
+
+def test_compile_world_pack_syncs_master_file_and_split_outputs(tmp_path: Path):
+    packs_dir = _copy_packs(tmp_path)
+    authoring_dir = tmp_path / "authoring"
+    authoring_dir.mkdir(parents=True, exist_ok=True)
+
+    master_payload = _minimal_world_master_payload()
+    master_payload["version"] = "3.0.0"
+    _write_json(authoring_dir / "world_master.json", master_payload)
+
+    summary = compile_world_pack(authoring_dir=authoring_dir, packs_dir=packs_dir)
+    assert summary["source_mode"] == "master"
+
+    split_dir = authoring_dir / "world_master"
+    assert split_dir.exists()
+    assert (split_dir / "meta.json").exists()
+    assert (split_dir / "nodes.json").exists()
+    assert (split_dir / "kind_registry.json").exists()
+
+    split_meta = _read_json(split_dir / "meta.json")
+    assert split_meta["version"] == "3.0.0"
+    split_nodes = _read_json(split_dir / "nodes.json")
+    assert split_nodes[0]["id"] == "WN-CHAR-001"

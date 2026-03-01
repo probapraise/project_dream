@@ -32,6 +32,7 @@
 - `schema_version`, `version`
 - `forbidden_terms`
 - `relation_conflict_rules`
+- `kind_registry`
 - `nodes`
 - `edges`
 - `events`
@@ -50,6 +51,14 @@
   - `linked_org_id`, `linked_char_id`, `linked_board_id` (엔진 연계용)
   - `attributes` (대량 확장을 위한 가변 속성)
   - `source`, `valid_from`, `valid_to`, `evidence_grade`, `visibility`
+
+### 3.0 `kind_registry` (범주 확장 허브)
+
+- 새 범주를 코드 수정 없이 데이터로 선언하기 위한 레지스트리
+- 권장 하위 키:
+  - `node_kinds`: 신규 노드 종류 선언
+  - `edge_kinds`: 신규 관계 종류 선언
+- 필드/규칙을 느슨하게 유지해, 미리 정의되지 않은 도메인도 수용 가능
 
 ### 3.2 `edges` (관계 허브)
 
@@ -107,12 +116,16 @@
 ## 5) 컴파일 경로(현재 반영 상태)
 
 - 입력 우선순위:
-  1. `authoring/world_master.json`
-  2. `authoring/world_pack.json`
-  3. split files (`world_meta.json + world_*.json`)
+  1. `authoring/world_master/` split 디렉터리
+  2. `authoring/world_master.json`
+  3. `authoring/world_pack.json`
+  4. split files (`world_meta.json + world_*.json`)
 - 출력:
   - `packs/world_pack.json` (`world_schema.v1`)
   - `packs/pack_manifest.json` (checksum 자동 갱신)
+  - `world_master` 입력 사용 시 단일/분할 포맷 자동 동기화
+    - `authoring/world_master.json`
+    - `authoring/world_master/`
 
 추가 보존:
 - `world_master`의 고급 정보(`claims`, `source_documents`, `taxonomy_terms`)는

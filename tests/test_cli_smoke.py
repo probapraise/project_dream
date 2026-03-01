@@ -30,6 +30,8 @@ def test_cli_supports_compile_command():
     assert args.command == "compile"
     assert args.authoring_dir == "authoring"
     assert args.packs_dir == "packs"
+    assert args.world_master_export_file is None
+    assert args.world_master_export_dir is None
 
 
 def test_cli_supports_regress_command():

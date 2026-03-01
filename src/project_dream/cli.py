@@ -345,6 +345,8 @@ def build_parser() -> argparse.ArgumentParser:
     compile_cmd = sub.add_parser("compile")
     compile_cmd.add_argument("--authoring-dir", required=False, default="authoring")
     compile_cmd.add_argument("--packs-dir", required=False, default="packs")
+    compile_cmd.add_argument("--world-master-export-file", required=False, default=None)
+    compile_cmd.add_argument("--world-master-export-dir", required=False, default=None)
 
     eva = sub.add_parser("evaluate")
     eva.add_argument("--runs-dir", required=False, default="runs")
@@ -478,6 +480,12 @@ def main(argv: list[str] | None = None) -> int:
         summary = compile_world_pack(
             authoring_dir=Path(args.authoring_dir),
             packs_dir=Path(args.packs_dir),
+            world_master_export_file=Path(args.world_master_export_file)
+            if args.world_master_export_file
+            else None,
+            world_master_export_dir=Path(args.world_master_export_dir)
+            if args.world_master_export_dir
+            else None,
         )
         print(json.dumps(summary, ensure_ascii=False))
     elif args.command == "evaluate":

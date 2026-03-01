@@ -76,11 +76,22 @@ python -m project_dream.cli compile --authoring-dir authoring --packs-dir packs
 
 입력 우선순위:
 
+- `authoring/world_master/` split 디렉터리 (`meta.json`, `nodes.json` 등)
 - `authoring/world_master.json` (`world_master.v1`, 대량 세계관 작성용)
 - `authoring/world_pack.json` (`world_schema.v1`, 단일 파일)
 - split files (`world_meta.json`, `world_entities.json` 등)
 
 `world_master.v1` 템플릿은 `examples/world_master_template.json`를 참고하면 됩니다.
+`world_master` 입력을 사용하면 compile 시 단일 파일과 split 디렉터리를 자동 동기화합니다.
+필요하면 export 경로를 직접 지정할 수 있습니다:
+
+```bash
+python -m project_dream.cli compile \
+  --authoring-dir authoring \
+  --packs-dir packs \
+  --world-master-export-file authoring/world_master.json \
+  --world-master-export-dir authoring/world_master
+```
 
 ### Run Tests With Gemini 3.1 Flash
 

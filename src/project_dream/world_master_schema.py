@@ -128,6 +128,7 @@ class WorldMasterPayload(_StrictModel):
     version: StrictStr = "1.0.0"
     forbidden_terms: list[StrictStr] = Field(default_factory=list)
     relation_conflict_rules: list[RelationConflictRuleRow] = Field(default_factory=list)
+    kind_registry: dict[StrictStr, Any] = Field(default_factory=dict)
     nodes: list[WorldMasterNodeRow] = Field(default_factory=list)
     edges: list[WorldMasterEdgeRow] = Field(default_factory=list)
     events: list[WorldMasterEventRow] = Field(default_factory=list)
@@ -342,6 +343,9 @@ def project_world_master_to_world_pack(master_payload: dict) -> dict:
     extensions = {
         "world_master": {
             "schema_version": str(world_master.get("schema_version", "world_master.v1")),
+            "kind_registry": dict(world_master.get("kind_registry", {}))
+            if isinstance(world_master.get("kind_registry"), dict)
+            else {},
             "source_documents": list(world_master.get("source_documents", [])),
             "claims": list(world_master.get("claims", [])),
             "taxonomy_terms": list(world_master.get("taxonomy_terms", [])),

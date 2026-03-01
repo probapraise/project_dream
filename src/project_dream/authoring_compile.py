@@ -6,6 +6,13 @@ from typing import Any
 
 from project_dream.pack_schemas import WorldPackPayload, validate_pack_payload
 from project_dream.pack_service import write_pack_manifest
+from project_dream.world_master_io import (
+    WORLD_MASTER_SPLIT_DIR_NAME,
+    load_world_master_file,
+    load_world_master_split_dir,
+    write_world_master_file,
+    write_world_master_split_dir,
+)
 from project_dream.world_master_schema import project_world_master_to_world_pack
 
 _WORLD_MONOLITHIC_FILE = "world_pack.json"
@@ -56,14 +63,15 @@ def _load_monolithic(authoring_dir: Path) -> tuple[str, dict] | None:
     return "monolithic", payload
 
 
-def _load_world_master(authoring_dir: Path) -> tuple[str, dict] | None:
-    source_path = authoring_dir / _WORLD_MASTER_FILE
-    if not source_path.exists():
-        return None
-    payload = _read_json(source_path)
-    if not isinstance(payload, dict):
-        raise ValueError(f"Expected object JSON: {source_path}")
-    return "master", project_world_master_to_world_pack(payload)
+def _load_world_master(authoring_dir: Path) -> tuple[str, dict, dict] | None:
+    split_dir_payload = load_world_master_split_dir(authoring_dir / WORLD_MASTER_SPLIT_DIR_NAME)
+    if split_dir_payload is not None:
+        return "master_split", project_world_master_to_world_pack(split_dir_payload), split_dir_payload
+
+    file_payload = load_world_master_file(authoring_dir / _WORLD_MASTER_FILE)
+    if file_payload is not None:
+        return "master", project_world_master_to_world_pack(file_payload), file_payload
+    return None
 
 
 def _load_split(authoring_dir: Path) -> tuple[str, dict] | None:
@@ -101,24 +109,33 @@ def _load_split(authoring_dir: Path) -> tuple[str, dict] | None:
     return "split", payload
 
 
-def _load_world_authoring(authoring_dir: Path) -> tuple[str, dict]:
+def _load_world_authoring(authoring_dir: Path) -> tuple[str, dict, dict | None]:
     master = _load_world_master(authoring_dir)
     if master is not None:
         return master
     monolithic = _load_monolithic(authoring_dir)
     if monolithic is not None:
-        return monolithic
+        mode, payload = monolithic
+        return mode, payload, None
     split = _load_split(authoring_dir)
     if split is not None:
-        return split
+        mode, payload = split
+        return mode, payload, None
     raise ValueError(
         "No world authoring source found. Provide authoring/world_pack.json "
-        "or authoring/world_master.json or split files (world_meta.json + world_*.json)."
+        "or authoring/world_master.json or authoring/world_master/*.json "
+        "or split files (world_meta.json + world_*.json)."
     )
 
 
-def compile_world_pack(*, authoring_dir: Path, packs_dir: Path) -> dict:
-    source_mode, world_payload = _load_world_authoring(authoring_dir)
+def compile_world_pack(
+    *,
+    authoring_dir: Path,
+    packs_dir: Path,
+    world_master_export_file: Path | None = None,
+    world_master_export_dir: Path | None = None,
+) -> dict:
+    source_mode, world_payload, world_master_payload = _load_world_authoring(authoring_dir)
     compiled_world = validate_pack_payload(world_payload, WorldPackPayload, "authoring world pack")
 
     packs_dir.mkdir(parents=True, exist_ok=True)
@@ -128,6 +145,16 @@ def compile_world_pack(*, authoring_dir: Path, packs_dir: Path) -> dict:
         encoding="utf-8",
     )
     manifest = write_pack_manifest(packs_dir)
+
+    resolved_master_export_file: str | None = None
+    resolved_master_export_dir: str | None = None
+    if world_master_payload is not None:
+        export_file = world_master_export_file or (authoring_dir / _WORLD_MASTER_FILE)
+        export_dir = world_master_export_dir or (authoring_dir / WORLD_MASTER_SPLIT_DIR_NAME)
+        canonical_master = write_world_master_file(world_master_payload, export_file)
+        write_world_master_split_dir(canonical_master, export_dir)
+        resolved_master_export_file = str(export_file)
+        resolved_master_export_dir = str(export_dir)
 
     return {
         "schema_version": "world_compile.v1",
@@ -142,4 +169,6 @@ def compile_world_pack(*, authoring_dir: Path, packs_dir: Path) -> dict:
         "timeline_events": len(compiled_world.get("timeline_events", [])),
         "world_rules": len(compiled_world.get("world_rules", [])),
         "glossary": len(compiled_world.get("glossary", [])),
+        "world_master_export_file": resolved_master_export_file,
+        "world_master_export_dir": resolved_master_export_dir,
     }
