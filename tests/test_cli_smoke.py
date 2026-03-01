@@ -24,6 +24,14 @@ def test_cli_supports_ingest_command():
     assert args.corpus_dir == "corpus"
 
 
+def test_cli_supports_compile_command():
+    parser = build_parser()
+    args = parser.parse_args(["compile"])
+    assert args.command == "compile"
+    assert args.authoring_dir == "authoring"
+    assert args.packs_dir == "packs"
+
+
 def test_cli_supports_regress_command():
     parser = build_parser()
     args = parser.parse_args(["regress"])

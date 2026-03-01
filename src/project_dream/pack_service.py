@@ -99,6 +99,25 @@ def _build_manifest_from_disk(base_dir: Path) -> dict:
     }
 
 
+def write_pack_manifest(base_dir: Path, *, pack_version: str | None = None) -> dict:
+    manifest = _build_manifest_from_disk(base_dir)
+    if pack_version:
+        manifest["pack_version"] = str(pack_version)
+    else:
+        existing_path = base_dir / "pack_manifest.json"
+        if existing_path.exists():
+            existing = json.loads(existing_path.read_text(encoding="utf-8"))
+            existing_version = str(existing.get("pack_version", "")).strip()
+            if existing_version:
+                manifest["pack_version"] = existing_version
+    manifest = validate_pack_payload(manifest, PackManifestPayload, "pack_manifest.json")
+    (base_dir / "pack_manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return manifest
+
+
 def _load_and_verify_manifest(base_dir: Path) -> tuple[dict, str]:
     manifest_path = base_dir / "pack_manifest.json"
     if not manifest_path.exists():

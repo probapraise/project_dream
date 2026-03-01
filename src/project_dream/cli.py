@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from project_dream.app_service import evaluate_and_persist, simulate_and_persist
+from project_dream.authoring_compile import compile_world_pack
 from project_dream.data_ingest import build_corpus_from_packs
 from project_dream.eval_export import export_external_eval_bundle
 from project_dream.infra.http_server import serve
@@ -341,6 +342,10 @@ def build_parser() -> argparse.ArgumentParser:
     ingest.add_argument("--packs-dir", required=False, default="packs")
     ingest.add_argument("--corpus-dir", required=False, default="corpus")
 
+    compile_cmd = sub.add_parser("compile")
+    compile_cmd.add_argument("--authoring-dir", required=False, default="authoring")
+    compile_cmd.add_argument("--packs-dir", required=False, default="packs")
+
     eva = sub.add_parser("evaluate")
     eva.add_argument("--runs-dir", required=False, default="runs")
     eva.add_argument("--run-id", required=False, default=None)
@@ -467,6 +472,12 @@ def main(argv: list[str] | None = None) -> int:
         summary = build_corpus_from_packs(
             packs_dir=Path(args.packs_dir),
             corpus_dir=Path(args.corpus_dir),
+        )
+        print(json.dumps(summary, ensure_ascii=False))
+    elif args.command == "compile":
+        summary = compile_world_pack(
+            authoring_dir=Path(args.authoring_dir),
+            packs_dir=Path(args.packs_dir),
         )
         print(json.dumps(summary, ensure_ascii=False))
     elif args.command == "evaluate":
