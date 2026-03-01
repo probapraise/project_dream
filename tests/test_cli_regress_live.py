@@ -124,6 +124,7 @@ def test_cli_regress_live_returns_nonzero_when_baseline_degrades(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
     baseline = tmp_path / "baseline.json"
+    diff_output = tmp_path / "regress-live-diff.md"
     baseline.write_text(
         cli.json.dumps(
             {
@@ -164,6 +165,8 @@ def test_cli_regress_live_returns_nonzero_when_baseline_degrades(
             "regress-live",
             "--baseline-file",
             str(baseline),
+            "--diff-output-file",
+            str(diff_output),
             "--allowed-rate-drop",
             "0.0",
             "--allowed-community-drop",
@@ -172,6 +175,10 @@ def test_cli_regress_live_returns_nonzero_when_baseline_degrades(
     )
 
     assert rc == 3
+    assert diff_output.exists()
+    content = diff_output.read_text(encoding="utf-8")
+    assert "status: **FAIL**" in content
+    assert "avg_stage_trace_coverage_rate" in content
 
 
 def test_cli_regress_live_returns_nonzero_when_register_switch_rate_degrades(
@@ -268,3 +275,53 @@ def test_cli_regress_live_returns_nonzero_when_cross_inflow_rate_degrades(
     )
 
     assert rc == 3
+
+
+def test_cli_regress_live_writes_diff_markdown_on_compare_pass(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    baseline = tmp_path / "baseline.json"
+    diff_output = tmp_path / "regress-live-diff.md"
+    baseline.write_text(
+        cli.json.dumps(
+            {
+                "schema_version": "regress_live_baseline.v1",
+                "metrics": {
+                    "eval_pass_rate": 1.0,
+                    "conflict_frame_rate": 1.0,
+                    "moderation_hook_rate": 1.0,
+                    "validation_warning_rate": 1.0,
+                    "register_switch_rate": 1.0,
+                    "cross_inflow_rate": 1.0,
+                    "meme_flow_rate": 1.0,
+                    "avg_stage_trace_coverage_rate": 1.0,
+                    "avg_culture_dial_alignment_rate": 0.75,
+                    "avg_culture_weight": 1.1,
+                    "unique_communities": 3,
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cli, "run_regression_batch", lambda **kwargs: _summary())
+
+    rc = cli.main(
+        [
+            "regress-live",
+            "--baseline-file",
+            str(baseline),
+            "--diff-output-file",
+            str(diff_output),
+            "--allowed-rate-drop",
+            "0.0",
+            "--allowed-community-drop",
+            "0",
+        ]
+    )
+
+    assert rc == 0
+    assert diff_output.exists()
+    content = diff_output.read_text(encoding="utf-8")
+    assert "status: **PASS**" in content
+    assert "cross_inflow_rate" in content

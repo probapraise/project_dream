@@ -73,6 +73,115 @@ def _build_regress_live_metrics(summary: dict) -> dict[str, float | int]:
     }
 
 
+def _regress_live_report_metric_keys(current_metrics: dict, baseline_metrics: dict) -> list[str]:
+    ordered = [
+        "seed_runs",
+        "eval_pass_rate",
+        "conflict_frame_rate",
+        "moderation_hook_rate",
+        "validation_warning_rate",
+        "register_switch_rate",
+        "cross_inflow_rate",
+        "meme_flow_rate",
+        "avg_stage_trace_coverage_rate",
+        "avg_culture_dial_alignment_rate",
+        "avg_culture_weight",
+        "unique_communities",
+    ]
+    extras = sorted(
+        {
+            str(key)
+            for key in set(current_metrics.keys()) | set(baseline_metrics.keys())
+            if key not in set(ordered)
+        }
+    )
+    return ordered + extras
+
+
+def _format_metric_value(value: float | int | None) -> str:
+    if value is None:
+        return "n/a"
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    if isinstance(value, int):
+        return str(value)
+    try:
+        return f"{float(value):.4f}"
+    except (TypeError, ValueError):
+        return "n/a"
+
+
+def _render_regress_live_diff_markdown(
+    *,
+    status: str,
+    baseline_path: Path,
+    current_metrics: dict[str, float | int],
+    baseline_metrics: dict[str, float | int],
+    failures: list[str],
+    allowed_rate_drop: float,
+    allowed_community_drop: int,
+) -> str:
+    lines = [
+        "## Regress-Live Baseline Diff",
+        "",
+        f"- status: **{status}**",
+        f"- generated_at_utc: `{datetime.now(UTC).isoformat()}`",
+        f"- baseline_file: `{baseline_path}`",
+        f"- allowed_rate_drop: `{allowed_rate_drop}`",
+        f"- allowed_community_drop: `{allowed_community_drop}`",
+        "",
+        "### Metrics",
+    ]
+
+    for key in _regress_live_report_metric_keys(current_metrics, baseline_metrics):
+        current_raw = current_metrics.get(key)
+        baseline_raw = baseline_metrics.get(key)
+        current_str = _format_metric_value(current_raw)
+        baseline_str = _format_metric_value(baseline_raw)
+        try:
+            delta = float(current_raw) - float(baseline_raw)
+            delta_str = f"{delta:+.4f}"
+        except (TypeError, ValueError):
+            delta_str = "n/a"
+        lines.append(
+            f"- `{key}`: current=`{current_str}` baseline=`{baseline_str}` delta=`{delta_str}`"
+        )
+
+    lines.extend(["", "### Failures"])
+    if failures:
+        for row in failures:
+            lines.append(f"- {row}")
+    else:
+        lines.append("- none")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _write_regress_live_diff(
+    path: Path,
+    *,
+    status: str,
+    baseline_path: Path,
+    current_metrics: dict[str, float | int],
+    baseline_metrics: dict[str, float | int],
+    failures: list[str],
+    allowed_rate_drop: float,
+    allowed_community_drop: int,
+) -> None:
+    content = _render_regress_live_diff_markdown(
+        status=status,
+        baseline_path=baseline_path,
+        current_metrics=current_metrics,
+        baseline_metrics=baseline_metrics,
+        failures=failures,
+        allowed_rate_drop=allowed_rate_drop,
+        allowed_community_drop=allowed_community_drop,
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
 def _load_json_or_none(path: Path) -> dict | None:
     if not path.exists():
         return None
@@ -260,6 +369,11 @@ def build_parser() -> argparse.ArgumentParser:
         required=False,
         default="runs/regressions/regress-live-baseline.json",
     )
+    reg_live.add_argument(
+        "--diff-output-file",
+        required=False,
+        default="runs/regressions/regress-live-diff.md",
+    )
     reg_live.add_argument("--update-baseline", action="store_true")
     reg_live.add_argument("--allowed-rate-drop", type=float, default=0.05)
     reg_live.add_argument("--allowed-community-drop", type=int, default=1)
@@ -368,6 +482,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if summary["pass_fail"] else 2
     elif args.command == "regress-live":
         baseline_path = Path(args.baseline_file)
+        diff_output_path = Path(args.diff_output_file)
         with _temporary_env(
             {
                 "PROJECT_DREAM_LLM_PROVIDER": "google",
@@ -411,8 +526,22 @@ def main(argv: list[str] | None = None) -> int:
 
         baseline_payload = _load_json_or_none(baseline_path)
         if baseline_payload is None:
+            _write_regress_live_diff(
+                diff_output_path,
+                status="SKIPPED",
+                baseline_path=baseline_path,
+                current_metrics=current_metrics,
+                baseline_metrics={},
+                failures=[f"baseline not found: {baseline_path}"],
+                allowed_rate_drop=args.allowed_rate_drop,
+                allowed_community_drop=args.allowed_community_drop,
+            )
             print(
                 f"[regress-live] baseline not found, skip compare: {baseline_path}",
+                file=sys.stderr,
+            )
+            print(
+                f"[regress-live] diff written: {diff_output_path}",
                 file=sys.stderr,
             )
             return 0
@@ -423,6 +552,21 @@ def main(argv: list[str] | None = None) -> int:
             baseline_metrics=baseline_metrics,
             allowed_rate_drop=args.allowed_rate_drop,
             allowed_community_drop=args.allowed_community_drop,
+        )
+        status = "FAIL" if failures else "PASS"
+        _write_regress_live_diff(
+            diff_output_path,
+            status=status,
+            baseline_path=baseline_path,
+            current_metrics=current_metrics,
+            baseline_metrics=baseline_metrics,
+            failures=failures,
+            allowed_rate_drop=args.allowed_rate_drop,
+            allowed_community_drop=args.allowed_community_drop,
+        )
+        print(
+            f"[regress-live] diff written: {diff_output_path}",
+            file=sys.stderr,
         )
         if failures:
             print("[regress-live] quality regression detected:", file=sys.stderr)

@@ -164,6 +164,7 @@ def test_cli_supports_regress_live_command_with_defaults():
     assert args.metric_set == "v2"
     assert args.llm_model == "gemini-3.1-flash"
     assert args.baseline_file == "runs/regressions/regress-live-baseline.json"
+    assert args.diff_output_file == "runs/regressions/regress-live-diff.md"
     assert args.orchestrator_backend == "manual"
     assert args.vector_backend == "memory"
     assert args.vector_db_path is None
