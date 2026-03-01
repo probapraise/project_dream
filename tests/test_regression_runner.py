@@ -51,10 +51,26 @@ def test_run_regression_batch_produces_summary_and_passes(tmp_path: Path):
     assert summary["totals"]["story_checklist_pass_runs"] == 2
     assert "register_switch_runs" in summary["totals"]
     assert "register_switch_rate" in summary["totals"]
+    assert "cross_inflow_runs" in summary["totals"]
+    assert "cross_inflow_rate" in summary["totals"]
+    assert "meme_flow_runs" in summary["totals"]
+    assert "meme_flow_rate" in summary["totals"]
+    assert "avg_culture_dial_alignment_rate" in summary["totals"]
+    assert "avg_culture_weight" in summary["totals"]
     assert summary["totals"]["register_switch_rate"] == pytest.approx(
         summary["totals"]["register_switch_runs"] / summary["totals"]["seed_runs"]
     )
+    assert summary["totals"]["cross_inflow_rate"] == pytest.approx(
+        summary["totals"]["cross_inflow_runs"] / summary["totals"]["seed_runs"]
+    )
+    assert summary["totals"]["meme_flow_rate"] == pytest.approx(
+        summary["totals"]["meme_flow_runs"] / summary["totals"]["seed_runs"]
+    )
     assert 0.0 <= summary["totals"]["register_switch_rate"] <= 1.0
+    assert 0.0 <= summary["totals"]["cross_inflow_rate"] <= 1.0
+    assert 0.0 <= summary["totals"]["meme_flow_rate"] <= 1.0
+    assert 0.0 <= summary["totals"]["avg_culture_dial_alignment_rate"] <= 1.0
+    assert 0.0 < summary["totals"]["avg_culture_weight"]
     assert summary["pass_fail"] is True
     assert "format_missing_zero" in summary["gates"]
     assert summary["gates"]["context_trace_runs"] is True

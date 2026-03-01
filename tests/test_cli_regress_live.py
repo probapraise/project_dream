@@ -14,8 +14,12 @@ def _summary(
     moderation_hook_runs: int = 2,
     validation_warning_runs: int = 2,
     register_switch_runs: int = 2,
+    cross_inflow_runs: int = 2,
+    meme_flow_runs: int = 2,
     unique_communities: int = 3,
     avg_stage_trace_coverage_rate: float = 1.0,
+    avg_culture_dial_alignment_rate: float = 0.75,
+    avg_culture_weight: float = 1.1,
 ) -> dict:
     return {
         "pass_fail": pass_fail,
@@ -27,8 +31,12 @@ def _summary(
             "moderation_hook_runs": moderation_hook_runs,
             "validation_warning_runs": validation_warning_runs,
             "register_switch_runs": register_switch_runs,
+            "cross_inflow_runs": cross_inflow_runs,
+            "meme_flow_runs": meme_flow_runs,
             "unique_communities": unique_communities,
             "avg_stage_trace_coverage_rate": avg_stage_trace_coverage_rate,
+            "avg_culture_dial_alignment_rate": avg_culture_dial_alignment_rate,
+            "avg_culture_weight": avg_culture_weight,
         },
     }
 
@@ -105,6 +113,10 @@ def test_cli_regress_live_updates_baseline_file(monkeypatch: pytest.MonkeyPatch,
     assert payload["schema_version"] == "regress_live_baseline.v1"
     assert payload["metrics"]["eval_pass_rate"] == 1.0
     assert payload["metrics"]["register_switch_rate"] == 1.0
+    assert payload["metrics"]["cross_inflow_rate"] == 1.0
+    assert payload["metrics"]["meme_flow_rate"] == 1.0
+    assert payload["metrics"]["avg_culture_dial_alignment_rate"] == 0.75
+    assert payload["metrics"]["avg_culture_weight"] == 1.1
     assert payload["metrics"]["unique_communities"] == 3
 
 
@@ -122,7 +134,11 @@ def test_cli_regress_live_returns_nonzero_when_baseline_degrades(
                     "moderation_hook_rate": 1.0,
                     "validation_warning_rate": 1.0,
                     "register_switch_rate": 1.0,
+                    "cross_inflow_rate": 1.0,
+                    "meme_flow_rate": 1.0,
                     "avg_stage_trace_coverage_rate": 1.0,
+                    "avg_culture_dial_alignment_rate": 1.0,
+                    "avg_culture_weight": 1.2,
                     "unique_communities": 3,
                 },
             },
@@ -172,7 +188,11 @@ def test_cli_regress_live_returns_nonzero_when_register_switch_rate_degrades(
                     "moderation_hook_rate": 1.0,
                     "validation_warning_rate": 1.0,
                     "register_switch_rate": 1.0,
+                    "cross_inflow_rate": 1.0,
+                    "meme_flow_rate": 1.0,
                     "avg_stage_trace_coverage_rate": 1.0,
+                    "avg_culture_dial_alignment_rate": 1.0,
+                    "avg_culture_weight": 1.2,
                     "unique_communities": 3,
                 },
             },
@@ -185,6 +205,54 @@ def test_cli_regress_live_returns_nonzero_when_register_switch_rate_degrades(
         cli,
         "run_regression_batch",
         lambda **kwargs: _summary(register_switch_runs=0),
+    )
+
+    rc = cli.main(
+        [
+            "regress-live",
+            "--baseline-file",
+            str(baseline),
+            "--allowed-rate-drop",
+            "0.0",
+            "--allowed-community-drop",
+            "0",
+        ]
+    )
+
+    assert rc == 3
+
+
+def test_cli_regress_live_returns_nonzero_when_cross_inflow_rate_degrades(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(
+        cli.json.dumps(
+            {
+                "schema_version": "regress_live_baseline.v1",
+                "metrics": {
+                    "eval_pass_rate": 1.0,
+                    "conflict_frame_rate": 1.0,
+                    "moderation_hook_rate": 1.0,
+                    "validation_warning_rate": 1.0,
+                    "register_switch_rate": 1.0,
+                    "cross_inflow_rate": 1.0,
+                    "meme_flow_rate": 1.0,
+                    "avg_stage_trace_coverage_rate": 1.0,
+                    "avg_culture_dial_alignment_rate": 1.0,
+                    "avg_culture_weight": 1.2,
+                    "unique_communities": 3,
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        cli,
+        "run_regression_batch",
+        lambda **kwargs: _summary(cross_inflow_runs=0),
     )
 
     rc = cli.main(

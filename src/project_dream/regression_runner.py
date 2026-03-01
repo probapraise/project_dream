@@ -114,6 +114,39 @@ def _collect_register_switch_stats(sim_result: dict) -> tuple[int, dict[str, int
     return register_switch_rounds, register_rule_counts
 
 
+def _event_count(sim_result: dict, key: str) -> int:
+    raw = sim_result.get(key, [])
+    if not isinstance(raw, list):
+        return 0
+    return sum(1 for row in raw if isinstance(row, dict))
+
+
+def _collect_culture_stats(sim_result: dict) -> tuple[float, float]:
+    rounds = sim_result.get("rounds", [])
+    if not isinstance(rounds, list):
+        return 0.0, 0.0
+
+    weights: list[float] = []
+    for row in rounds:
+        if not isinstance(row, dict):
+            continue
+        try:
+            weight = float(row.get("culture_weight_multiplier"))
+        except (TypeError, ValueError):
+            continue
+        if weight <= 0:
+            continue
+        weights.append(weight)
+
+    if not weights:
+        return 0.0, 0.0
+
+    aligned = sum(1 for weight in weights if weight >= 1.0)
+    alignment_rate = float(round(aligned / len(weights), 4))
+    weight_avg = float(round(sum(weights) / len(weights), 4))
+    return alignment_rate, weight_avg
+
+
 def _write_summary(output_dir: Path, summary: dict) -> Path:
     summary_dir = output_dir / "regressions"
     summary_dir.mkdir(parents=True, exist_ok=True)
@@ -164,6 +197,12 @@ def run_regression_batch(
     story_checklist_pass_runs = 0
     register_switch_runs = 0
     register_switch_rounds = 0
+    cross_inflow_runs = 0
+    cross_inflow_events = 0
+    meme_flow_runs = 0
+    meme_flow_events = 0
+    culture_dial_alignment_rate_sum = 0.0
+    culture_weight_avg_sum = 0.0
     register_rule_counts_total: dict[str, int] = {}
 
     for seed_file in seed_files:
@@ -215,6 +254,15 @@ def run_regression_batch(
         has_report_gate_pass = bool(report_gate.get("pass_fail"))
         run_register_switch_rounds, run_register_rule_counts = _collect_register_switch_stats(sim_result)
         has_register_switch = run_register_switch_rounds > 0
+        run_cross_inflow_events = _event_count(sim_result, "cross_inflow_logs")
+        run_meme_flow_events = _event_count(sim_result, "meme_flow_logs")
+        has_cross_inflow = run_cross_inflow_events > 0
+        has_meme_flow = run_meme_flow_events > 0
+        derived_alignment_rate, derived_weight_avg = _collect_culture_stats(sim_result)
+        culture_dial_alignment_rate = float(
+            eval_result.get("metrics", {}).get("culture_dial_alignment_rate", derived_alignment_rate)
+        )
+        culture_weight_avg = float(eval_result.get("metrics", {}).get("culture_weight_avg", derived_weight_avg))
 
         missing_required_sections_total += len(missing_sections)
         conflict_frame_runs += int(has_conflict)
@@ -230,6 +278,12 @@ def run_regression_batch(
         story_checklist_pass_runs += int(has_story_checklist_required_items)
         register_switch_runs += int(has_register_switch)
         register_switch_rounds += run_register_switch_rounds
+        cross_inflow_runs += int(has_cross_inflow)
+        cross_inflow_events += run_cross_inflow_events
+        meme_flow_runs += int(has_meme_flow)
+        meme_flow_events += run_meme_flow_events
+        culture_dial_alignment_rate_sum += culture_dial_alignment_rate
+        culture_weight_avg_sum += culture_weight_avg
         for rule_id, count in run_register_rule_counts.items():
             register_rule_counts_total[rule_id] = register_rule_counts_total.get(rule_id, 0) + count
 
@@ -254,6 +308,12 @@ def run_regression_batch(
                 "has_register_switch": has_register_switch,
                 "register_switch_rounds": run_register_switch_rounds,
                 "register_rule_counts": run_register_rule_counts,
+                "has_cross_inflow": has_cross_inflow,
+                "cross_inflow_events": run_cross_inflow_events,
+                "has_meme_flow": has_meme_flow,
+                "meme_flow_events": run_meme_flow_events,
+                "culture_dial_alignment_rate": culture_dial_alignment_rate,
+                "culture_weight_avg": culture_weight_avg,
             }
         )
 
@@ -262,6 +322,12 @@ def run_regression_batch(
         float(round(stage_trace_coverage_sum / seed_runs, 4)) if seed_runs > 0 else 0.0
     )
     register_switch_rate = float(round(register_switch_runs / seed_runs, 4)) if seed_runs > 0 else 0.0
+    cross_inflow_rate = float(round(cross_inflow_runs / seed_runs, 4)) if seed_runs > 0 else 0.0
+    meme_flow_rate = float(round(meme_flow_runs / seed_runs, 4)) if seed_runs > 0 else 0.0
+    avg_culture_dial_alignment_rate = (
+        float(round(culture_dial_alignment_rate_sum / seed_runs, 4)) if seed_runs > 0 else 0.0
+    )
+    avg_culture_weight = float(round(culture_weight_avg_sum / seed_runs, 4)) if seed_runs > 0 else 0.0
     register_rule_top = [
         {"rule_id": rule_id, "count": count}
         for rule_id, count in sorted(register_rule_counts_total.items(), key=lambda row: (-row[1], row[0]))[:5]
@@ -321,6 +387,14 @@ def run_regression_batch(
             "register_switch_runs": register_switch_runs,
             "register_switch_rounds": register_switch_rounds,
             "register_switch_rate": register_switch_rate,
+            "cross_inflow_runs": cross_inflow_runs,
+            "cross_inflow_events": cross_inflow_events,
+            "cross_inflow_rate": cross_inflow_rate,
+            "meme_flow_runs": meme_flow_runs,
+            "meme_flow_events": meme_flow_events,
+            "meme_flow_rate": meme_flow_rate,
+            "avg_culture_dial_alignment_rate": avg_culture_dial_alignment_rate,
+            "avg_culture_weight": avg_culture_weight,
         },
         "register_rule_top": register_rule_top,
         "gates": gates,

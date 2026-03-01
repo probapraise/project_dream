@@ -20,6 +20,12 @@ def test_render_markdown_contains_gate_and_totals():
             "story_checklist_pass_runs": 10,
             "register_switch_runs": 5,
             "register_switch_rate": 0.5,
+            "cross_inflow_runs": 6,
+            "cross_inflow_rate": 0.6,
+            "meme_flow_runs": 8,
+            "meme_flow_rate": 0.8,
+            "avg_culture_dial_alignment_rate": 0.7,
+            "avg_culture_weight": 1.1,
         },
         "gates": {
             "format_missing_zero": True,
@@ -40,6 +46,12 @@ def test_render_markdown_contains_gate_and_totals():
     assert "story_checklist_pass_runs: `10`" in markdown
     assert "register_switch_runs: `5`" in markdown
     assert "register_switch_rate: `0.5`" in markdown
+    assert "cross_inflow_runs: `6`" in markdown
+    assert "cross_inflow_rate: `0.6`" in markdown
+    assert "meme_flow_runs: `8`" in markdown
+    assert "meme_flow_rate: `0.8`" in markdown
+    assert "avg_culture_dial_alignment_rate: `0.7`" in markdown
+    assert "avg_culture_weight: `1.1`" in markdown
     assert "`format_missing_zero`" in markdown
 
 

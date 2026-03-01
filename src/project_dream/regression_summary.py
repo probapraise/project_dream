@@ -31,6 +31,12 @@ def render_summary_markdown(summary: dict) -> str:
         f"- story_checklist_pass_runs: `{totals.get('story_checklist_pass_runs', 0)}`",
         f"- register_switch_runs: `{totals.get('register_switch_runs', 0)}`",
         f"- register_switch_rate: `{totals.get('register_switch_rate', 0.0)}`",
+        f"- cross_inflow_runs: `{totals.get('cross_inflow_runs', 0)}`",
+        f"- cross_inflow_rate: `{totals.get('cross_inflow_rate', 0.0)}`",
+        f"- meme_flow_runs: `{totals.get('meme_flow_runs', 0)}`",
+        f"- meme_flow_rate: `{totals.get('meme_flow_rate', 0.0)}`",
+        f"- avg_culture_dial_alignment_rate: `{totals.get('avg_culture_dial_alignment_rate', 0.0)}`",
+        f"- avg_culture_weight: `{totals.get('avg_culture_weight', 0.0)}`",
         "",
         "### Gates",
     ]
