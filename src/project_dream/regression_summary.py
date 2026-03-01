@@ -28,6 +28,8 @@ def render_summary_markdown(summary: dict) -> str:
         f"- seed_runs: `{totals.get('seed_runs', 0)}`",
         f"- eval_pass_runs: `{totals.get('eval_pass_runs', 0)}`",
         f"- unique_communities: `{totals.get('unique_communities', 0)}`",
+        f"- register_switch_runs: `{totals.get('register_switch_runs', 0)}`",
+        f"- register_switch_rate: `{totals.get('register_switch_rate', 0.0)}`",
         "",
         "### Gates",
     ]
@@ -35,6 +37,18 @@ def render_summary_markdown(summary: dict) -> str:
     for key in sorted(gates.keys()):
         icon = "PASS" if gates.get(key) else "FAIL"
         lines.append(f"- `{key}`: **{icon}**")
+
+    register_rule_top = summary.get("register_rule_top", [])
+    if isinstance(register_rule_top, list) and register_rule_top:
+        lines.extend(["", "### Register Rule Top"])
+        for row in register_rule_top[:5]:
+            if not isinstance(row, dict):
+                continue
+            rule_id = str(row.get("rule_id", "")).strip()
+            count = int(row.get("count", 0))
+            if not rule_id:
+                continue
+            lines.append(f"- `{rule_id}`: `{count}`")
 
     if summary_path:
         lines.extend(["", f"- summary_path: `{summary_path}`"])

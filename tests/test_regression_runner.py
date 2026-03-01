@@ -48,6 +48,12 @@ def test_run_regression_batch_produces_summary_and_passes(tmp_path: Path):
     assert summary["totals"]["stage_trace_ordered_runs"] == 2
     assert summary["totals"]["avg_stage_trace_coverage_rate"] == pytest.approx(1.0)
     assert summary["totals"]["report_gate_pass_runs"] == 2
+    assert "register_switch_runs" in summary["totals"]
+    assert "register_switch_rate" in summary["totals"]
+    assert summary["totals"]["register_switch_rate"] == pytest.approx(
+        summary["totals"]["register_switch_runs"] / summary["totals"]["seed_runs"]
+    )
+    assert 0.0 <= summary["totals"]["register_switch_rate"] <= 1.0
     assert summary["pass_fail"] is True
     assert "format_missing_zero" in summary["gates"]
     assert summary["gates"]["context_trace_runs"] is True

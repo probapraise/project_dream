@@ -13,7 +13,13 @@ def test_render_markdown_contains_gate_and_totals():
         "schema_version": "regression.v1",
         "metric_set": "v2",
         "pass_fail": True,
-        "totals": {"seed_runs": 10, "eval_pass_runs": 10, "unique_communities": 4},
+        "totals": {
+            "seed_runs": 10,
+            "eval_pass_runs": 10,
+            "unique_communities": 4,
+            "register_switch_runs": 5,
+            "register_switch_rate": 0.5,
+        },
         "gates": {
             "format_missing_zero": True,
             "community_coverage": True,
@@ -30,6 +36,8 @@ def test_render_markdown_contains_gate_and_totals():
     assert "PASS" in markdown
     assert "metric_set: `v2`" in markdown
     assert "seed_runs: `10`" in markdown
+    assert "register_switch_runs: `5`" in markdown
+    assert "register_switch_rate: `0.5`" in markdown
     assert "`format_missing_zero`" in markdown
 
 

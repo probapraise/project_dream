@@ -88,6 +88,24 @@ def _has_stage_trace_ordering(eval_result: dict) -> bool:
     return False
 
 
+def _collect_register_switch_stats(sim_result: dict) -> tuple[int, dict[str, int]]:
+    register_switch_rounds = 0
+    register_rule_counts: dict[str, int] = {}
+
+    for row in sim_result.get("rounds", []):
+        if not isinstance(row, dict):
+            continue
+        if not bool(row.get("register_switch_applied")):
+            continue
+
+        register_switch_rounds += 1
+        rule_id = str(row.get("register_rule_id", "")).strip()
+        if rule_id:
+            register_rule_counts[rule_id] = register_rule_counts.get(rule_id, 0) + 1
+
+    return register_switch_rounds, register_rule_counts
+
+
 def _write_summary(output_dir: Path, summary: dict) -> Path:
     summary_dir = output_dir / "regressions"
     summary_dir.mkdir(parents=True, exist_ok=True)
@@ -135,6 +153,9 @@ def run_regression_batch(
     stage_trace_coverage_sum = 0.0
     eval_pass_runs = 0
     report_gate_pass_runs = 0
+    register_switch_runs = 0
+    register_switch_rounds = 0
+    register_rule_counts_total: dict[str, int] = {}
 
     for seed_file in seed_files:
         seed = SeedInput.model_validate_json(seed_file.read_text(encoding="utf-8"))
@@ -182,6 +203,8 @@ def run_regression_batch(
         stage_trace_coverage_rate = float(eval_result.get("metrics", {}).get("stage_trace_coverage_rate", 0.0))
         report_gate = report.get("report_gate", {}) if isinstance(report, dict) else {}
         has_report_gate_pass = bool(report_gate.get("pass_fail"))
+        run_register_switch_rounds, run_register_rule_counts = _collect_register_switch_stats(sim_result)
+        has_register_switch = run_register_switch_rounds > 0
 
         missing_required_sections_total += len(missing_sections)
         conflict_frame_runs += int(has_conflict)
@@ -194,6 +217,10 @@ def run_regression_batch(
         stage_trace_coverage_sum += stage_trace_coverage_rate
         eval_pass_runs += int(bool(eval_result.get("pass_fail")))
         report_gate_pass_runs += int(has_report_gate_pass)
+        register_switch_runs += int(has_register_switch)
+        register_switch_rounds += run_register_switch_rounds
+        for rule_id, count in run_register_rule_counts.items():
+            register_rule_counts_total[rule_id] = register_rule_counts_total.get(rule_id, 0) + count
 
         run_summaries.append(
             {
@@ -212,6 +239,9 @@ def run_regression_batch(
                 "has_stage_trace_ordering": has_stage_trace_ordering,
                 "stage_trace_coverage_rate": stage_trace_coverage_rate,
                 "has_report_gate_pass": has_report_gate_pass,
+                "has_register_switch": has_register_switch,
+                "register_switch_rounds": run_register_switch_rounds,
+                "register_rule_counts": run_register_rule_counts,
             }
         )
 
@@ -219,6 +249,11 @@ def run_regression_batch(
     avg_stage_trace_coverage_rate = (
         float(round(stage_trace_coverage_sum / seed_runs, 4)) if seed_runs > 0 else 0.0
     )
+    register_switch_rate = float(round(register_switch_runs / seed_runs, 4)) if seed_runs > 0 else 0.0
+    register_rule_top = [
+        {"rule_id": rule_id, "count": count}
+        for rule_id, count in sorted(register_rule_counts_total.items(), key=lambda row: (-row[1], row[0]))[:5]
+    ]
 
     gates = {
         "format_missing_zero": missing_required_sections_total == 0,
@@ -269,7 +304,11 @@ def run_regression_batch(
             "stage_trace_ordered_runs": stage_trace_ordered_runs,
             "avg_stage_trace_coverage_rate": avg_stage_trace_coverage_rate,
             "report_gate_pass_runs": report_gate_pass_runs,
+            "register_switch_runs": register_switch_runs,
+            "register_switch_rounds": register_switch_rounds,
+            "register_switch_rate": register_switch_rate,
         },
+        "register_rule_top": register_rule_top,
         "gates": gates,
         "runs": run_summaries,
     }

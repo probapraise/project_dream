@@ -49,6 +49,7 @@ def _build_regress_live_metrics(summary: dict) -> dict[str, float | int]:
     conflict_frame_runs = int(totals.get("conflict_frame_runs", 0))
     moderation_hook_runs = int(totals.get("moderation_hook_runs", 0))
     validation_warning_runs = int(totals.get("validation_warning_runs", 0))
+    register_switch_runs = int(totals.get("register_switch_runs", 0))
     unique_communities = int(totals.get("unique_communities", 0))
     avg_stage_trace_coverage_rate = float(totals.get("avg_stage_trace_coverage_rate", 0.0))
 
@@ -58,6 +59,7 @@ def _build_regress_live_metrics(summary: dict) -> dict[str, float | int]:
         "conflict_frame_rate": _ratio(conflict_frame_runs, seed_runs),
         "moderation_hook_rate": _ratio(moderation_hook_runs, seed_runs),
         "validation_warning_rate": _ratio(validation_warning_runs, seed_runs),
+        "register_switch_rate": _ratio(register_switch_runs, seed_runs),
         "unique_communities": unique_communities,
         "avg_stage_trace_coverage_rate": avg_stage_trace_coverage_rate,
     }
@@ -115,6 +117,7 @@ def _compare_regress_live_baseline(
         "conflict_frame_rate",
         "moderation_hook_rate",
         "validation_warning_rate",
+        "register_switch_rate",
         "avg_stage_trace_coverage_rate",
     ]
 
