@@ -1,16 +1,95 @@
 {
   "version": "1.0.0",
   "archetypes": [
-    {"id": "AG-01", "name": "정리꾼", "style": "요약 중심"},
-    {"id": "AG-02", "name": "규정러", "style": "조항 인용"},
-    {"id": "AG-03", "name": "선동러", "style": "감정 과열"},
-    {"id": "AG-04", "name": "팩트체커", "style": "근거 추적"},
-    {"id": "AG-05", "name": "거래러", "style": "비용 계산"},
-    {"id": "AG-06", "name": "풍자러", "style": "밈/패러디"},
-    {"id": "AG-07", "name": "피해호소형", "style": "경험 중심"},
-    {"id": "AG-08", "name": "운영옹호형", "style": "질서 우선"},
-    {"id": "AG-09", "name": "음모론형", "style": "의혹 연결"},
-    {"id": "AG-10", "name": "중재형", "style": "절충 제안"}
+    {"id": "AG-01", "name": "정리꾼", "style": "요약 중심", "default_register_profile_id": "REG-NEUTRAL"},
+    {"id": "AG-02", "name": "규정러", "style": "조항 인용", "default_register_profile_id": "REG-FORMAL"},
+    {"id": "AG-03", "name": "선동러", "style": "감정 과열", "default_register_profile_id": "REG-AMPLIFY"},
+    {"id": "AG-04", "name": "팩트체커", "style": "근거 추적", "default_register_profile_id": "REG-EVIDENCE"},
+    {"id": "AG-05", "name": "거래러", "style": "비용 계산", "default_register_profile_id": "REG-NEUTRAL"},
+    {"id": "AG-06", "name": "풍자러", "style": "밈/패러디", "default_register_profile_id": "REG-AMPLIFY"},
+    {"id": "AG-07", "name": "피해호소형", "style": "경험 중심", "default_register_profile_id": "REG-EMPATHY"},
+    {"id": "AG-08", "name": "운영옹호형", "style": "질서 우선", "default_register_profile_id": "REG-FORMAL"},
+    {"id": "AG-09", "name": "음모론형", "style": "의혹 연결", "default_register_profile_id": "REG-ALERT"},
+    {"id": "AG-10", "name": "중재형", "style": "절충 제안", "default_register_profile_id": "REG-FORMAL"}
+  ],
+  "register_profiles": [
+    {
+      "id": "REG-NEUTRAL",
+      "sentence_length": "medium",
+      "endings": ["정리하면", "요점은"],
+      "frequent_words": ["핵심", "정리", "요약"],
+      "taboo_words": []
+    },
+    {
+      "id": "REG-FORMAL",
+      "sentence_length": "medium",
+      "endings": ["입니다", "근거상", "절차상"],
+      "frequent_words": ["규정", "절차", "검토"],
+      "taboo_words": []
+    },
+    {
+      "id": "REG-EVIDENCE",
+      "sentence_length": "medium",
+      "endings": ["확인됨", "재검증 필요", "로그 기준"],
+      "frequent_words": ["근거", "로그", "반례"],
+      "taboo_words": ["authority_abuse"]
+    },
+    {
+      "id": "REG-AMPLIFY",
+      "sentence_length": "short",
+      "endings": ["짤로간다", "밈각", "확산중"],
+      "frequent_words": ["밈", "패러디", "확산"],
+      "taboo_words": ["realname_mock"]
+    },
+    {
+      "id": "REG-ALERT",
+      "sentence_length": "short",
+      "endings": ["급함", "지금확인", "만료임박"],
+      "frequent_words": ["경보", "긴급", "카운트다운"],
+      "taboo_words": []
+    },
+    {
+      "id": "REG-CONTAIN",
+      "sentence_length": "short",
+      "endings": ["봉문유지", "확산중단", "절차우선"],
+      "frequent_words": ["통제", "봉문", "제한"],
+      "taboo_words": ["panic_false_alarm"]
+    },
+    {
+      "id": "REG-EMPATHY",
+      "sentence_length": "medium",
+      "endings": ["이해합니다", "조심합시다", "도움필요"],
+      "frequent_words": ["피해", "불안", "지원"],
+      "taboo_words": []
+    }
+  ],
+  "register_switch_rules": [
+    {
+      "id": "RR-MOD-CONTAIN",
+      "priority": 100,
+      "apply_profile_id": "REG-CONTAIN",
+      "conditions": {
+        "status_in": ["locked", "ghost", "sanctioned"]
+      }
+    },
+    {
+      "id": "RR-HYPE-AMPLIFY",
+      "priority": 90,
+      "apply_profile_id": "REG-AMPLIFY",
+      "conditions": {
+        "dial_axis_in": ["H"],
+        "meme_phase_in": ["factory_amplify", "backflow"],
+        "round_gte": 2
+      }
+    },
+    {
+      "id": "RR-EVIDENCE-ALERT",
+      "priority": 80,
+      "apply_profile_id": "REG-ALERT",
+      "conditions": {
+        "evidence_hours_lte": 24
+      }
+    }
   ],
   "personas": [
     {"id": "P01", "char_id": "CHAR-ST-001", "archetype_id": "AG-07", "main_com": "COM-PLZ-001"},

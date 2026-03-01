@@ -2,7 +2,7 @@ from pathlib import Path
 
 from project_dream.models import SeedInput
 from project_dream.pack_service import load_packs
-from project_dream.persona_service import render_voice, select_participants
+from project_dream.persona_service import apply_register_switch, render_voice, select_participants
 
 
 def test_select_participants_prefers_board_zone_personas():
@@ -41,3 +41,49 @@ def test_render_voice_returns_constraints():
     assert voice["endings"]
     assert voice["frequent_words"]
     assert isinstance(voice["taboo_words"], list)
+
+
+def test_apply_register_switch_uses_pack_rules_and_profiles():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    base_voice = render_voice("P07", "D", packs=packs)
+
+    switched = apply_register_switch(
+        base_voice,
+        persona_id="P07",
+        packs=packs,
+        runtime_context={
+            "round_idx": 2,
+            "dial_dominant_axis": "H",
+            "meme_phase": "factory_amplify",
+            "status": "visible",
+            "total_reports": 0,
+            "evidence_hours_left": 72,
+        },
+    )
+
+    assert switched["register_switch_applied"] is True
+    assert switched["register_profile_id"] == "REG-AMPLIFY"
+    assert switched["register_rule_id"] == "RR-HYPE-AMPLIFY"
+    assert "짤로간다" in switched["endings"]
+
+
+def test_apply_register_switch_keeps_base_voice_when_no_rule_matches():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    base_voice = render_voice("P07", "D", packs=packs)
+
+    switched = apply_register_switch(
+        base_voice,
+        persona_id="P07",
+        packs=packs,
+        runtime_context={
+            "round_idx": 1,
+            "dial_dominant_axis": "E",
+            "meme_phase": "hub_to_factory",
+            "status": "visible",
+            "total_reports": 0,
+            "evidence_hours_left": 72,
+        },
+    )
+
+    assert switched["register_switch_applied"] is False
+    assert switched["register_rule_id"] == ""

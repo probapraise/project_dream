@@ -101,6 +101,38 @@ class PersonaRow(_StrictModel):
     main_com: StrictStr = ""
 
 
+class ArchetypeRow(_StrictModel):
+    id: StrictStr
+    name: StrictStr = ""
+    style: StrictStr = ""
+    default_register_profile_id: StrictStr = ""
+
+
+class RegisterProfileRow(_StrictModel):
+    id: StrictStr
+    sentence_length: StrictStr = "medium"
+    endings: list[StrictStr] = Field(default_factory=list)
+    frequent_words: list[StrictStr] = Field(default_factory=list)
+    taboo_words: list[StrictStr] = Field(default_factory=list)
+
+
+class RegisterSwitchConditions(_StrictModel):
+    archetype_ids: list[StrictStr] = Field(default_factory=list)
+    dial_axis_in: list[StrictStr] = Field(default_factory=list)
+    meme_phase_in: list[StrictStr] = Field(default_factory=list)
+    status_in: list[StrictStr] = Field(default_factory=list)
+    reports_gte: StrictInt = 0
+    evidence_hours_lte: StrictInt = 9999
+    round_gte: StrictInt = 0
+
+
+class RegisterSwitchRuleRow(_StrictModel):
+    id: StrictStr
+    priority: StrictInt = 0
+    apply_profile_id: StrictStr
+    conditions: RegisterSwitchConditions = Field(default_factory=RegisterSwitchConditions)
+
+
 class EscalationCondition(_StrictModel):
     reports_gte: StrictInt = 0
     round_gte: StrictInt = 0
@@ -179,8 +211,10 @@ class EntityPackPayload(_StrictModel):
 
 class PersonaPackPayload(_StrictModel):
     version: StrictStr = "1.0.0"
-    archetypes: list[dict] = Field(default_factory=list)
+    archetypes: list[ArchetypeRow] = Field(default_factory=list)
     personas: list[PersonaRow] = Field(default_factory=list)
+    register_profiles: list[RegisterProfileRow] = Field(default_factory=list)
+    register_switch_rules: list[RegisterSwitchRuleRow] = Field(default_factory=list)
 
 
 class TemplatePackPayload(_StrictModel):

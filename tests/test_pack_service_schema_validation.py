@@ -136,3 +136,34 @@ def test_load_packs_rejects_manifest_checksum_mismatch(tmp_path: Path):
         load_packs(packs_dir)
 
     assert "checksum mismatch" in str(exc.value)
+
+
+def test_load_packs_rejects_unknown_register_profile_reference(tmp_path: Path):
+    packs_dir = _copy_packs(tmp_path)
+    persona_path = packs_dir / "persona_pack.json"
+    payload = _read_json(persona_path)
+    payload["register_profiles"] = [
+        {
+            "id": "REG-BASE",
+            "sentence_length": "medium",
+            "endings": ["입니다"],
+            "frequent_words": ["정리"],
+        }
+    ]
+    for archetype in payload.get("archetypes", []):
+        if isinstance(archetype, dict):
+            archetype["default_register_profile_id"] = "REG-BASE"
+    payload["register_switch_rules"] = [
+        {
+            "id": "RR-UNKNOWN",
+            "priority": 10,
+            "apply_profile_id": "REG-NOT-FOUND",
+            "conditions": {"dial_axis_in": ["H"]},
+        }
+    ]
+    _write_json(persona_path, payload)
+
+    with pytest.raises(ValueError) as exc:
+        load_packs(packs_dir)
+
+    assert "Unknown register_profile_id" in str(exc.value)

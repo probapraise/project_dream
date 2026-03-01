@@ -62,3 +62,12 @@ def test_pack_service_exposes_manifest_and_fingerprint():
     assert packs.pack_manifest["checksum_algorithm"] == "sha256"
     assert isinstance(packs.pack_fingerprint, str)
     assert len(packs.pack_fingerprint) == 64
+
+
+def test_pack_service_loads_register_profiles_and_switch_rules():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+
+    assert isinstance(packs.register_profiles, dict)
+    assert "REG-AMPLIFY" in packs.register_profiles
+    assert isinstance(packs.register_switch_rules, list)
+    assert any(rule.get("id") == "RR-HYPE-AMPLIFY" for rule in packs.register_switch_rules)

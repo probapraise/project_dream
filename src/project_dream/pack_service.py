@@ -22,7 +22,10 @@ class LoadedPacks:
     rules: dict[str, dict]
     orgs: dict[str, dict]
     chars: dict[str, dict]
+    archetypes: dict[str, dict]
     personas: dict[str, dict]
+    register_profiles: dict[str, dict]
+    register_switch_rules: list[dict]
     thread_templates: dict[str, dict]
     comment_flows: dict[str, dict]
     event_cards: dict[str, dict]
@@ -47,6 +50,8 @@ _PACK_FILE_NAMES = (
     "persona_pack.json",
     "template_pack.json",
 )
+_ALLOWED_DIAL_AXES = {"U", "E", "M", "S", "H"}
+_ALLOWED_STATUS_VALUES = {"visible", "hidden", "locked", "ghost", "sanctioned"}
 
 
 def _read_pack(path: Path, default_key: str) -> dict:
@@ -368,7 +373,17 @@ def load_packs(base_dir: Path, enforce_phase1_minimums: bool = False) -> LoadedP
     gate_policy = _normalize_gate_policy(rule_pack.get("gate_policy", {}))
     orgs = _index_by_id(entity_pack.get("orgs", []), "org")
     chars = _index_by_id(entity_pack.get("chars", []), "char")
+    archetypes = _index_by_id(persona_pack.get("archetypes", []), "archetype")
     personas = _index_by_id(persona_pack.get("personas", []), "persona")
+    register_profiles = _index_by_id(persona_pack.get("register_profiles", []), "register_profile")
+    register_switch_rules = sorted(
+        [
+            dict(rule)
+            for rule in persona_pack.get("register_switch_rules", [])
+            if isinstance(rule, dict)
+        ],
+        key=lambda row: (-int(row.get("priority", 0)), str(row.get("id", ""))),
+    )
     raw_thread_templates = _index_by_id(template_pack.get("thread_templates", []), "thread_template")
     raw_comment_flows = _index_by_id(template_pack.get("comment_flows", []), "comment_flow")
     event_cards = _index_by_id(template_pack.get("event_cards", []), "event_card")
@@ -399,6 +414,35 @@ def load_packs(base_dir: Path, enforce_phase1_minimums: bool = False) -> LoadedP
         char_id = persona.get("char_id")
         if char_id and char_id not in chars:
             raise ValueError(f"Unknown char_id for persona {persona['id']}: {char_id}")
+        archetype_id = str(persona.get("archetype_id", "")).strip()
+        if archetype_id and archetype_id not in archetypes:
+            raise ValueError(f"Unknown archetype_id for persona {persona['id']}: {archetype_id}")
+
+    for archetype in archetypes.values():
+        default_profile_id = str(archetype.get("default_register_profile_id", "")).strip()
+        if default_profile_id and default_profile_id not in register_profiles:
+            raise ValueError(
+                f"Unknown default_register_profile_id for archetype {archetype['id']}: {default_profile_id}"
+            )
+
+    for rule in register_switch_rules:
+        profile_id = str(rule.get("apply_profile_id", "")).strip()
+        if profile_id not in register_profiles:
+            raise ValueError(f"Unknown register_profile_id in register_switch_rule {rule.get('id', '')}: {profile_id}")
+        conditions = rule.get("conditions", {})
+        if not isinstance(conditions, dict):
+            conditions = {}
+        for archetype_id in _as_str_list(conditions.get("archetype_ids")):
+            if archetype_id not in archetypes:
+                raise ValueError(
+                    f"Unknown archetype_id in register_switch_rule {rule.get('id', '')}: {archetype_id}"
+                )
+        for axis in _as_str_list(conditions.get("dial_axis_in")):
+            if axis not in _ALLOWED_DIAL_AXES:
+                raise ValueError(f"Unknown dial axis in register_switch_rule {rule.get('id', '')}: {axis}")
+        for status in _as_str_list(conditions.get("status_in")):
+            if status not in _ALLOWED_STATUS_VALUES:
+                raise ValueError(f"Unknown status in register_switch_rule {rule.get('id', '')}: {status}")
 
     for template in thread_templates.values():
         for board_id in template.get("intended_boards", []):
@@ -427,7 +471,10 @@ def load_packs(base_dir: Path, enforce_phase1_minimums: bool = False) -> LoadedP
         rules=rules,
         orgs=orgs,
         chars=chars,
+        archetypes=archetypes,
         personas=personas,
+        register_profiles=register_profiles,
+        register_switch_rules=register_switch_rules,
         thread_templates=thread_templates,
         comment_flows=comment_flows,
         event_cards=event_cards,

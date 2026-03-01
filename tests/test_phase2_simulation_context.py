@@ -478,3 +478,24 @@ def test_simulation_applies_board_culture_weight_by_dial_axis():
     assert hype_first["board_emotion"] == "냉소"
     assert evidence_first["board_emotion"] == "냉소"
     assert float(hype_first["culture_weight_multiplier"]) > float(evidence_first["culture_weight_multiplier"])
+
+
+def test_simulation_emits_register_switch_metadata_in_round_logs():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    seed = SeedInput(
+        seed_id="SEED-REG-SWITCH-001",
+        title="레지스터 스위치 테스트",
+        summary="밈 과열 구간에서 레지스터가 전환되어야 한다",
+        board_id="B16",
+        zone_id="A",
+        dial={"U": 10, "E": 10, "M": 10, "S": 10, "H": 60},
+    )
+
+    result = run_simulation(seed=seed, rounds=4, corpus=["샘플"], max_retries=0, packs=packs)
+
+    rounds = result["rounds"]
+    assert rounds
+    assert all("register_profile_id" in row for row in rounds)
+    assert all("register_rule_id" in row for row in rounds)
+    assert all("register_switch_applied" in row for row in rounds)
+    assert any(bool(row["register_switch_applied"]) for row in rounds)

@@ -1,7 +1,7 @@
 from project_dream.env_engine import apply_policy_transition, compute_culture_weight, compute_score
 from project_dream.gen_engine import generate_comment, pop_last_generation_trace, reset_last_generation_trace
 from project_dream.gate_pipeline import run_gates
-from project_dream.persona_service import render_voice, select_participants
+from project_dream.persona_service import apply_register_switch, render_voice, select_participants
 from project_dream.prompt_templates import render_prompt
 from typing import TypedDict
 
@@ -983,6 +983,9 @@ def _round_node_emit_logs(
     memory_before: str,
     memory_entries: list[str],
     voice_constraints: dict,
+    register_profile_id: str,
+    register_rule_id: str,
+    register_switch_applied: bool,
     gates: list[dict],
     transition_event: dict,
     report_delta: int,
@@ -1029,6 +1032,9 @@ def _round_node_emit_logs(
         "memory_before": memory_before,
         "memory_after": memory_after,
         "voice_style": voice_constraints.get("sentence_length", "medium"),
+        "register_profile_id": register_profile_id,
+        "register_rule_id": register_rule_id,
+        "register_switch_applied": register_switch_applied,
         "round_loop_nodes": list(ROUND_LOOP_NODE_ORDER),
     }
     gate_row = {"round": round_idx, "persona_id": persona_id, "gates": gates}
@@ -1237,6 +1243,19 @@ def run_simulation(
             before_entries = persona_memory.get(persona_id, [])
             memory_before = _memory_summary(before_entries)
             voice_constraints = dict(render_voice(persona_id, seed.zone_id, packs=packs))
+            voice_constraints = apply_register_switch(
+                voice_constraints,
+                persona_id=persona_id,
+                packs=packs,
+                runtime_context={
+                    "round_idx": round_idx,
+                    "dial_dominant_axis": dial_dominant_axis,
+                    "meme_phase": str(round_meme_row.get("phase", "")),
+                    "status": status,
+                    "total_reports": total_reports,
+                    "evidence_hours_left": evidence_hours_left,
+                },
+            )
             base_taboos = _as_str_list(voice_constraints.get("taboo_words"))
             voice_constraints["taboo_words"] = _unique(base_taboos + template_taboos)
 
@@ -1322,6 +1341,9 @@ def run_simulation(
                 memory_before=memory_before,
                 memory_entries=memory_entries,
                 voice_constraints=voice_constraints,
+                register_profile_id=str(voice_constraints.get("register_profile_id", "")),
+                register_rule_id=str(voice_constraints.get("register_rule_id", "")),
+                register_switch_applied=bool(voice_constraints.get("register_switch_applied", False)),
                 gates=list(gated["gates"]),
                 transition_event=transition_event,
                 report_delta=report_delta,
