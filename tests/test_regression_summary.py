@@ -91,6 +91,7 @@ def test_render_markdown_includes_regress_live_diff_brief_when_present():
     markdown = render_summary_markdown(summary)
 
     assert "### Regress-Live Diff Brief" in markdown
+    assert "- regress_live_tldr: `FAIL | eval_pass_rate: current=0.5000 baseline=1.0000 allowed_drop=0.0000`" in markdown
     assert "status: **FAIL**" in markdown
     assert "eval_pass_rate: current=0.5000 baseline=1.0000 allowed_drop=0.0000" in markdown
     assert "unique_communities: current=1 baseline=3 allowed_drop=0" in markdown
@@ -185,5 +186,6 @@ def test_write_job_summary_includes_regress_live_diff_brief_when_failures_exist(
     content = out.read_text(encoding="utf-8")
 
     assert "### Regress-Live Diff Brief" in content
+    assert "- regress_live_tldr: `FAIL | eval_pass_rate: current=0.5000 baseline=1.0000 allowed_drop=0.0000`" in content
     assert "status: **FAIL**" in content
     assert "eval_pass_rate: current=0.5000 baseline=1.0000 allowed_drop=0.0000" in content

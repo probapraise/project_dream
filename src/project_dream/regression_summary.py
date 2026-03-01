@@ -48,6 +48,23 @@ def extract_regress_live_diff_brief(markdown: str) -> dict:
     }
 
 
+def build_regress_live_tldr(brief: dict) -> str:
+    if not isinstance(brief, dict):
+        return ""
+    status = str(brief.get("status", "")).strip() or "UNKNOWN"
+    top_failures = brief.get("top_failures", [])
+    first_failure = ""
+    if isinstance(top_failures, list):
+        for row in top_failures:
+            text = str(row).strip()
+            if text:
+                first_failure = text
+                break
+    if not first_failure:
+        first_failure = "none"
+    return f"{status} | {first_failure}"
+
+
 def render_summary_markdown(summary: dict) -> str:
     gates = summary.get("gates", {})
     totals = summary.get("totals", {})
@@ -57,6 +74,7 @@ def render_summary_markdown(summary: dict) -> str:
     summary_path = summary.get("summary_path", "")
     regress_live_diff_path = summary.get("regress_live_diff_path", "")
     regress_live_diff_brief = summary.get("regress_live_diff_brief", {})
+    regress_live_tldr = build_regress_live_tldr(regress_live_diff_brief)
     brief_status = ""
     brief_failures: list[str] = []
     if isinstance(regress_live_diff_brief, dict):
@@ -77,6 +95,7 @@ def render_summary_markdown(summary: dict) -> str:
             [
                 "",
                 "### Regress-Live Diff Brief",
+                f"- regress_live_tldr: `{regress_live_tldr}`",
                 f"- status: **{brief_status or 'UNKNOWN'}**",
             ]
         )
