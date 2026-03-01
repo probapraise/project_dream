@@ -36,6 +36,51 @@ class RuleRow(_StrictModel):
     summary: StrictStr = ""
 
 
+class GateSafetyRuleIds(_StrictModel):
+    pii_phone: StrictStr = "RULE-PLZ-SAFE-01"
+    taboo_term: StrictStr = "RULE-PLZ-SAFE-02"
+    seed_forbidden: StrictStr = "RULE-PLZ-SAFE-03"
+
+
+class GateLoreRuleIds(_StrictModel):
+    evidence_missing: StrictStr = "RULE-PLZ-LORE-01"
+    consistency_conflict: StrictStr = "RULE-PLZ-LORE-02"
+
+
+class ContradictionTermGroup(_StrictModel):
+    positives: list[StrictStr] = Field(default_factory=list)
+    negatives: list[StrictStr] = Field(default_factory=list)
+
+
+class GateSafetyPolicy(_StrictModel):
+    phone_pattern: StrictStr = r"01[0-9]-\d{3,4}-\d{4}"
+    taboo_words: list[StrictStr] = Field(
+        default_factory=lambda: ["실명", "서명 단서", "사망 조롱"]
+    )
+    rule_ids: GateSafetyRuleIds = Field(default_factory=GateSafetyRuleIds)
+
+
+class GateLorePolicy(_StrictModel):
+    evidence_keywords: list[StrictStr] = Field(
+        default_factory=lambda: ["정본", "증거", "로그", "출처", "근거"]
+    )
+    context_keywords: list[StrictStr] = Field(
+        default_factory=lambda: ["주장", "판단", "사실", "정황", "의혹"]
+    )
+    contradiction_term_groups: list[ContradictionTermGroup] = Field(
+        default_factory=lambda: [
+            ContradictionTermGroup(positives=["확정", "단정"], negatives=["추정", "의혹", "가능성"]),
+            ContradictionTermGroup(positives=["사실"], negatives=["루머", "소문"]),
+        ]
+    )
+    rule_ids: GateLoreRuleIds = Field(default_factory=GateLoreRuleIds)
+
+
+class GatePolicy(_StrictModel):
+    safety: GateSafetyPolicy = Field(default_factory=GateSafetyPolicy)
+    lore: GateLorePolicy = Field(default_factory=GateLorePolicy)
+
+
 class OrgRow(_StrictModel):
     id: StrictStr
     name: StrictStr
@@ -116,6 +161,7 @@ class CommunityPackPayload(_StrictModel):
 class RulePackPayload(_StrictModel):
     version: StrictStr = "1.0.0"
     rules: list[RuleRow] = Field(default_factory=list)
+    gate_policy: GatePolicy = Field(default_factory=GatePolicy)
 
 
 class EntityPackPayload(_StrictModel):

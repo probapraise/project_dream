@@ -25,6 +25,7 @@ class LoadedPacks:
     comment_flows: dict[str, dict]
     event_cards: dict[str, dict]
     meme_seeds: dict[str, dict]
+    gate_policy: dict
 
 
 _FLOW_TABOO_HINTS = {
@@ -185,6 +186,60 @@ def _normalize_comment_flow(flow: dict) -> dict:
     return out
 
 
+def _normalize_gate_policy(raw_policy: dict) -> dict:
+    safety_raw = raw_policy.get("safety", {}) if isinstance(raw_policy, dict) else {}
+    lore_raw = raw_policy.get("lore", {}) if isinstance(raw_policy, dict) else {}
+    contradiction_groups_raw = (
+        lore_raw.get("contradiction_term_groups", [])
+        if isinstance(lore_raw, dict)
+        else []
+    )
+    contradiction_term_groups: list[dict] = []
+    if isinstance(contradiction_groups_raw, list):
+        for group in contradiction_groups_raw:
+            if not isinstance(group, dict):
+                continue
+            positives = _as_str_list(group.get("positives"))
+            negatives = _as_str_list(group.get("negatives"))
+            if not positives or not negatives:
+                continue
+            contradiction_term_groups.append({"positives": positives, "negatives": negatives})
+
+    taboo_words = _as_str_list(safety_raw.get("taboo_words"))
+    if not taboo_words:
+        taboo_words = ["실명", "서명 단서", "사망 조롱"]
+    evidence_keywords = _as_str_list(lore_raw.get("evidence_keywords"))
+    if not evidence_keywords:
+        evidence_keywords = ["정본", "증거", "로그", "출처", "근거"]
+    context_keywords = _as_str_list(lore_raw.get("context_keywords"))
+    if not context_keywords:
+        context_keywords = ["주장", "판단", "사실", "정황", "의혹"]
+    if not contradiction_term_groups:
+        contradiction_term_groups = [
+            {"positives": ["확정", "단정"], "negatives": ["추정", "의혹", "가능성"]},
+            {"positives": ["사실"], "negatives": ["루머", "소문"]},
+        ]
+
+    return {
+        "safety": {
+            "phone_pattern": str(safety_raw.get("phone_pattern", r"01[0-9]-\d{3,4}-\d{4}")).strip()
+            or r"01[0-9]-\d{3,4}-\d{4}",
+            "taboo_words": taboo_words,
+            "rule_ids": dict(safety_raw.get("rule_ids", {}))
+            if isinstance(safety_raw.get("rule_ids"), dict)
+            else {},
+        },
+        "lore": {
+            "evidence_keywords": evidence_keywords,
+            "context_keywords": context_keywords,
+            "contradiction_term_groups": contradiction_term_groups,
+            "rule_ids": dict(lore_raw.get("rule_ids", {}))
+            if isinstance(lore_raw.get("rule_ids"), dict)
+            else {},
+        },
+    }
+
+
 def _validate_minimum_requirements(packs: LoadedPacks) -> None:
     if len(packs.boards) != 18:
         raise ValueError(f"Expected 18 boards, got {len(packs.boards)}")
@@ -233,6 +288,7 @@ def load_packs(base_dir: Path, enforce_phase1_minimums: bool = False) -> LoadedP
     boards = _index_by_id(board_pack["boards"], "board")
     communities = _index_by_id(community_pack["communities"], "community")
     rules = _index_by_id(rule_pack.get("rules", []), "rule")
+    gate_policy = _normalize_gate_policy(rule_pack.get("gate_policy", {}))
     orgs = _index_by_id(entity_pack.get("orgs", []), "org")
     chars = _index_by_id(entity_pack.get("chars", []), "char")
     personas = _index_by_id(persona_pack.get("personas", []), "persona")
@@ -299,6 +355,7 @@ def load_packs(base_dir: Path, enforce_phase1_minimums: bool = False) -> LoadedP
         comment_flows=comment_flows,
         event_cards=event_cards,
         meme_seeds=meme_seeds,
+        gate_policy=gate_policy,
     )
 
     if enforce_phase1_minimums:

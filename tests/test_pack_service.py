@@ -38,3 +38,17 @@ def test_pack_service_loads_event_cards_and_meme_seeds():
     first_meme = next(iter(packs.meme_seeds.values()))
     assert "id" in first_event
     assert "id" in first_meme
+
+
+def test_pack_service_loads_gate_policy_from_rule_pack():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+
+    assert isinstance(packs.gate_policy, dict)
+    assert "safety" in packs.gate_policy
+    assert "lore" in packs.gate_policy
+
+    safety = packs.gate_policy["safety"]
+    lore = packs.gate_policy["lore"]
+    assert isinstance(safety.get("taboo_words"), list)
+    assert isinstance(lore.get("evidence_keywords"), list)
+    assert isinstance(lore.get("contradiction_term_groups"), list)

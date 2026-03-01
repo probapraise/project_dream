@@ -525,17 +525,20 @@ def _round_node_gate_retry(
     max_retries: int,
     forbidden_terms: list[str] | None = None,
     sensitivity_tags: list[str] | None = None,
+    gate_policy: dict | None = None,
 ) -> dict:
     last = None
     total_failed_in_attempts = 0
     current_text = text
 
     for _ in range(max_retries + 1):
-        gate_kwargs: dict[str, list[str]] = {}
+        gate_kwargs: dict[str, object] = {}
         if forbidden_terms:
             gate_kwargs["forbidden_terms"] = list(forbidden_terms)
         if sensitivity_tags:
             gate_kwargs["sensitivity_tags"] = list(sensitivity_tags)
+        if gate_policy:
+            gate_kwargs["gate_policy"] = dict(gate_policy)
         last = run_gates(current_text, corpus=corpus, **gate_kwargs)
         failed_in_attempt = [gate for gate in last["gates"] if not gate["passed"]]
         total_failed_in_attempts += len(failed_in_attempt)
@@ -814,6 +817,11 @@ def run_simulation(
     template_taboos = _as_str_list(template_context.get("taboos"))
     seed_forbidden_terms = _as_str_list(getattr(seed, "forbidden_terms", []))
     seed_sensitivity_tags = _as_str_list(getattr(seed, "sensitivity_tags", []))
+    pack_gate_policy = None
+    if packs is not None:
+        raw_policy = getattr(packs, "gate_policy", None)
+        if isinstance(raw_policy, dict):
+            pack_gate_policy = dict(raw_policy)
     raw_evidence_grade = str(getattr(seed, "evidence_grade", "B")).strip().upper()
     evidence_grade = raw_evidence_grade if raw_evidence_grade in {"A", "B", "C"} else "B"
     evidence_type = str(getattr(seed, "evidence_type", "log")).strip() or "log"
@@ -867,6 +875,7 @@ def run_simulation(
                 max_retries=max_retries,
                 forbidden_terms=seed_forbidden_terms,
                 sensitivity_tags=seed_sensitivity_tags,
+                gate_policy=pack_gate_policy,
             )
             transitioned = _round_node_policy_transition(
                 round_idx=round_idx,

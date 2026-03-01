@@ -274,3 +274,36 @@ def test_simulation_tracks_evidence_grade_and_countdown():
     first_hour = rounds[0]["evidence_hours_left"]
     last_hour = rounds[-1]["evidence_hours_left"]
     assert first_hour >= last_hour
+
+
+def test_simulation_passes_pack_gate_policy_into_gate_pipeline(monkeypatch):
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    seed = SeedInput(
+        seed_id="SEED-GATE-POLICY-001",
+        title="게이트 정책 주입 테스트",
+        summary="pack gate_policy가 run_gates로 전달되는지 확인",
+        board_id="B07",
+        zone_id="D",
+    )
+    captured_gate_policies: list[dict] = []
+
+    def fake_run_gates(text: str, corpus: list[str], **kwargs) -> dict:
+        policy = kwargs.get("gate_policy")
+        if isinstance(policy, dict):
+            captured_gate_policies.append(policy)
+        return {
+            "final_text": text,
+            "gates": [
+                {"gate_name": "safety", "passed": True, "reason": "ok", "violations": []},
+                {"gate_name": "similarity", "passed": True, "reason": "ok", "violations": []},
+                {"gate_name": "lore", "passed": True, "reason": "ok", "violations": []},
+            ],
+            "violations": [],
+        }
+
+    monkeypatch.setattr("project_dream.sim_orchestrator.run_gates", fake_run_gates)
+
+    run_simulation(seed=seed, rounds=2, corpus=["샘플"], packs=packs)
+
+    assert captured_gate_policies
+    assert captured_gate_policies[0] == packs.gate_policy
