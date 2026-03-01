@@ -1,4 +1,5 @@
 import json
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -6,6 +7,7 @@ from project_dream.pack_schemas import (
     BoardPackPayload,
     CommunityPackPayload,
     EntityPackPayload,
+    PackManifestPayload,
     PersonaPackPayload,
     RulePackPayload,
     TemplatePackPayload,
@@ -26,6 +28,8 @@ class LoadedPacks:
     event_cards: dict[str, dict]
     meme_seeds: dict[str, dict]
     gate_policy: dict
+    pack_manifest: dict
+    pack_fingerprint: str
 
 
 _FLOW_TABOO_HINTS = {
@@ -35,12 +39,83 @@ _FLOW_TABOO_HINTS = {
     "P5": ["illegal_trade", "fake_review"],
     "P6": ["realname_mock", "death_mocking"],
 }
+_PACK_FILE_NAMES = (
+    "board_pack.json",
+    "community_pack.json",
+    "rule_pack.json",
+    "entity_pack.json",
+    "persona_pack.json",
+    "template_pack.json",
+)
 
 
 def _read_pack(path: Path, default_key: str) -> dict:
     if not path.exists():
         return {default_key: []}
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _sha256_file(path: Path) -> str:
+    if not path.exists():
+        raise ValueError(f"Pack manifest referenced missing file: {path.name}")
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _build_manifest_fingerprint(manifest: dict) -> str:
+    files = manifest.get("files", {})
+    normalized_files = {}
+    if isinstance(files, dict):
+        for key in sorted(files.keys()):
+            normalized_files[str(key)] = str(files.get(key, ""))
+    normalized = {
+        "schema_version": str(manifest.get("schema_version", "pack_manifest.v1")),
+        "pack_version": str(manifest.get("pack_version", "1.0.0")),
+        "checksum_algorithm": str(manifest.get("checksum_algorithm", "sha256")),
+        "files": normalized_files,
+    }
+    payload = json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _build_manifest_from_disk(base_dir: Path) -> dict:
+    files: dict[str, str] = {}
+    for filename in _PACK_FILE_NAMES:
+        path = base_dir / filename
+        if path.exists():
+            files[filename] = _sha256_file(path)
+    return {
+        "schema_version": "pack_manifest.v1",
+        "pack_version": "1.0.0",
+        "checksum_algorithm": "sha256",
+        "files": files,
+    }
+
+
+def _load_and_verify_manifest(base_dir: Path) -> tuple[dict, str]:
+    manifest_path = base_dir / "pack_manifest.json"
+    if not manifest_path.exists():
+        fallback_manifest = _build_manifest_from_disk(base_dir)
+        return fallback_manifest, _build_manifest_fingerprint(fallback_manifest)
+
+    raw_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = validate_pack_payload(raw_manifest, PackManifestPayload, "pack_manifest.json")
+    algorithm = str(manifest.get("checksum_algorithm", "")).strip().lower()
+    if algorithm != "sha256":
+        raise ValueError(f"Unsupported pack manifest checksum algorithm: {algorithm}")
+
+    manifest_files = manifest.get("files", {})
+    if not isinstance(manifest_files, dict):
+        raise ValueError("Invalid pack manifest files payload")
+
+    for filename in _PACK_FILE_NAMES:
+        expected = str(manifest_files.get(filename, "")).strip().lower()
+        if not expected:
+            raise ValueError(f"Pack manifest missing checksum: {filename}")
+        actual = _sha256_file(base_dir / filename)
+        if actual != expected:
+            raise ValueError(f"Pack manifest checksum mismatch: {filename}")
+
+    return manifest, _build_manifest_fingerprint(manifest)
 
 
 def _index_by_id(items: list[dict], name: str) -> dict[str, dict]:
@@ -254,6 +329,8 @@ def _validate_minimum_requirements(packs: LoadedPacks) -> None:
 
 
 def load_packs(base_dir: Path, enforce_phase1_minimums: bool = False) -> LoadedPacks:
+    pack_manifest, pack_fingerprint = _load_and_verify_manifest(base_dir)
+
     board_pack = validate_pack_payload(
         _read_pack(base_dir / "board_pack.json", "boards"),
         BoardPackPayload,
@@ -356,6 +433,8 @@ def load_packs(base_dir: Path, enforce_phase1_minimums: bool = False) -> LoadedP
         event_cards=event_cards,
         meme_seeds=meme_seeds,
         gate_policy=gate_policy,
+        pack_manifest=pack_manifest,
+        pack_fingerprint=pack_fingerprint,
     )
 
     if enforce_phase1_minimums:

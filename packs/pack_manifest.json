@@ -1,0 +1,13 @@
+{
+  "schema_version": "pack_manifest.v1",
+  "pack_version": "1.0.0",
+  "checksum_algorithm": "sha256",
+  "files": {
+    "board_pack.json": "4ffe9939570610f482521f03298dd1625e20313281081d2278596e70879837b9",
+    "community_pack.json": "b9d1a5427b2ad633273b373923ae8a20bff0534296e709c55bfb4d571007c8c2",
+    "rule_pack.json": "6bbed20ccd8acdb85972bb3a6ade94260af836fc8f13cbea2e66e023857f17f7",
+    "entity_pack.json": "ce539c6c0f67f740a0121d17e53096b5653328fe687658cabde934f43da13de5",
+    "persona_pack.json": "91a3c4a8de45b258ccda29de5c3b03b9b888d9bc96790130026eca1ef9b39ac6",
+    "template_pack.json": "956018a20bf7f59ee7fc7943434b142dd54af88eb36ed047b8c7832b878268d4"
+  }
+}

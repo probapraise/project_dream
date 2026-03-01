@@ -1,5 +1,8 @@
 import json
+import shutil
 from pathlib import Path
+
+import pytest
 
 from project_dream.cli import main
 
@@ -41,15 +44,21 @@ def test_cli_simulate_writes_run_outputs(tmp_path: Path):
     report_md_files = list((tmp_path / "runs").glob("*/report.md"))
     report_json_files = list((tmp_path / "runs").glob("*/report.json"))
     seed_json_files = list((tmp_path / "runs").glob("*/seed.json"))
+    pack_manifest_files = list((tmp_path / "runs").glob("*/pack_manifest.json"))
     assert report_md_files
     assert report_json_files
     assert seed_json_files
+    assert pack_manifest_files
 
     runlog_path = runlogs[0]
     rows = [json.loads(line) for line in runlog_path.read_text(encoding="utf-8").splitlines()]
     assert any(row.get("type") == "round" and "community_id" in row for row in rows)
     assert any(row.get("type") == "action" for row in rows)
     assert any(row.get("type") == "context" and "seed" in row for row in rows)
+    context_row = next(row for row in rows if row.get("type") == "context")
+    assert context_row["pack_manifest"]["schema_version"] == "pack_manifest.v1"
+    assert isinstance(context_row["pack_fingerprint"], str)
+    assert len(context_row["pack_fingerprint"]) == 64
 
     seed_json = json.loads(seed_json_files[0].read_text(encoding="utf-8"))
     assert seed_json["seed_id"] == "SEED-001"
@@ -99,3 +108,42 @@ def test_cli_simulate_uses_vector_backend_env_defaults(tmp_path: Path, monkeypat
     )
     assert rc == 0
     assert vector_db_path.exists()
+
+
+def test_cli_simulate_fails_when_pack_manifest_checksum_mismatches(tmp_path: Path):
+    seed_file = tmp_path / "seed.json"
+    seed_file.write_text(
+        json.dumps(
+            {
+                "seed_id": "SEED-MANIFEST-001",
+                "title": "매니페스트 검증 실패",
+                "summary": "체크섬 불일치 시 시뮬레이션이 실패해야 한다",
+                "board_id": "B07",
+                "zone_id": "D",
+            }
+        ),
+        encoding="utf-8",
+    )
+    packs_dir = tmp_path / "packs"
+    shutil.copytree(Path("packs"), packs_dir)
+    board_pack_path = packs_dir / "board_pack.json"
+    board_payload = json.loads(board_pack_path.read_text(encoding="utf-8"))
+    board_payload["boards"][0]["name"] = "변조된 게시판명"
+    board_pack_path.write_text(json.dumps(board_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    with pytest.raises(ValueError) as exc:
+        main(
+            [
+                "simulate",
+                "--seed",
+                str(seed_file),
+                "--packs-dir",
+                str(packs_dir),
+                "--output-dir",
+                str(tmp_path / "runs"),
+                "--rounds",
+                "2",
+            ]
+        )
+
+    assert "checksum mismatch" in str(exc.value)

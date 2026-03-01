@@ -58,6 +58,10 @@ def persist_run(output_dir: Path, sim_result: dict, report: dict) -> Path:
     run_dir = output_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     seed_payload = sim_result.get("seed")
+    pack_manifest_payload = sim_result.get("pack_manifest")
+    if not isinstance(pack_manifest_payload, dict):
+        pack_manifest_payload = None
+    pack_fingerprint = str(sim_result.get("pack_fingerprint", "")).strip() or None
 
     with (run_dir / "runlog.jsonl").open("w", encoding="utf-8") as fp:
         context_bundle = sim_result.get("context_bundle")
@@ -69,6 +73,8 @@ def persist_run(output_dir: Path, sim_result: dict, report: dict) -> Path:
                         "bundle": context_bundle,
                         "corpus": sim_result.get("context_corpus", []),
                         "seed": seed_payload if isinstance(seed_payload, dict) else None,
+                        "pack_manifest": pack_manifest_payload,
+                        "pack_fingerprint": pack_fingerprint,
                     },
                     ensure_ascii=False,
                 )
@@ -162,6 +168,11 @@ def persist_run(output_dir: Path, sim_result: dict, report: dict) -> Path:
     if isinstance(seed_payload, dict):
         (run_dir / "seed.json").write_text(
             json.dumps(seed_payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    if isinstance(pack_manifest_payload, dict):
+        (run_dir / "pack_manifest.json").write_text(
+            json.dumps(pack_manifest_payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
     return run_dir

@@ -63,6 +63,8 @@ def simulate_and_persist(
     sim_result["context_bundle"] = context["bundle"]
     sim_result["context_corpus"] = merged_corpus
     sim_result["seed"] = seed.model_dump()
+    sim_result["pack_manifest"] = packs.pack_manifest
+    sim_result["pack_fingerprint"] = packs.pack_fingerprint
     report = build_report_v1(seed, sim_result, packs)
     return repository.persist_run(sim_result, report)
 

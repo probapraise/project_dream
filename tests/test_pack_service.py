@@ -52,3 +52,13 @@ def test_pack_service_loads_gate_policy_from_rule_pack():
     assert isinstance(safety.get("taboo_words"), list)
     assert isinstance(lore.get("evidence_keywords"), list)
     assert isinstance(lore.get("contradiction_term_groups"), list)
+
+
+def test_pack_service_exposes_manifest_and_fingerprint():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+
+    assert isinstance(packs.pack_manifest, dict)
+    assert packs.pack_manifest["schema_version"] == "pack_manifest.v1"
+    assert packs.pack_manifest["checksum_algorithm"] == "sha256"
+    assert isinstance(packs.pack_fingerprint, str)
+    assert len(packs.pack_fingerprint) == 64

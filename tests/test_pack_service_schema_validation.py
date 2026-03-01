@@ -10,6 +10,9 @@ from project_dream.pack_service import load_packs
 def _copy_packs(tmp_path: Path) -> Path:
     dst = tmp_path / "packs"
     shutil.copytree(Path("packs"), dst)
+    manifest_path = dst / "pack_manifest.json"
+    if manifest_path.exists():
+        manifest_path.unlink()
     return dst
 
 
@@ -109,3 +112,27 @@ def test_load_packs_rejects_invalid_gate_policy_keyword_type(tmp_path: Path):
         load_packs(packs_dir)
 
     assert "evidence_keywords" in str(exc.value)
+
+
+def test_load_packs_rejects_manifest_checksum_mismatch(tmp_path: Path):
+    packs_dir = _copy_packs(tmp_path)
+    manifest_path = packs_dir / "pack_manifest.json"
+    manifest_payload = {
+        "schema_version": "pack_manifest.v1",
+        "pack_version": "1.0.0",
+        "checksum_algorithm": "sha256",
+        "files": {
+            "board_pack.json": "deadbeef",
+            "community_pack.json": "deadbeef",
+            "rule_pack.json": "deadbeef",
+            "entity_pack.json": "deadbeef",
+            "persona_pack.json": "deadbeef",
+            "template_pack.json": "deadbeef",
+        },
+    }
+    _write_json(manifest_path, manifest_payload)
+
+    with pytest.raises(ValueError) as exc:
+        load_packs(packs_dir)
+
+    assert "checksum mismatch" in str(exc.value)

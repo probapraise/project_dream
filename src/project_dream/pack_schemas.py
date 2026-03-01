@@ -164,6 +164,13 @@ class RulePackPayload(_StrictModel):
     gate_policy: GatePolicy = Field(default_factory=GatePolicy)
 
 
+class PackManifestPayload(_StrictModel):
+    schema_version: StrictStr = "pack_manifest.v1"
+    pack_version: StrictStr = "1.0.0"
+    checksum_algorithm: StrictStr = "sha256"
+    files: dict[StrictStr, StrictStr] = Field(default_factory=dict)
+
+
 class EntityPackPayload(_StrictModel):
     version: StrictStr = "1.0.0"
     orgs: list[OrgRow] = Field(default_factory=list)
