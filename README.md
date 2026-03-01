@@ -10,6 +10,7 @@ source .venv/bin/activate
 pip install -e .
 pytest -q
 python -m project_dream.cli ingest --packs-dir packs --corpus-dir corpus
+python -m project_dream.cli compile --authoring-dir authoring --packs-dir packs
 python -m project_dream.cli simulate --seed examples/seeds/seed_001.json --output-dir runs --rounds 3
 python -m project_dream.cli evaluate --runs-dir runs --metric-set v2
 python -m project_dream.cli regress --seeds-dir examples/seeds/regression --output-dir runs --max-seeds 10
@@ -64,6 +65,22 @@ python -m project_dream.cli ingest --packs-dir packs --corpus-dir corpus
 `simulate`, `regress`, `regress-live`는 기본적으로 `corpus/`를 자동 로드해 context corpus에 병합합니다.
 다른 경로를 쓰려면 각 명령에 `--corpus-dir <path>`를 지정하면 됩니다.
 또한 KB 조회(`search_knowledge`, `retrieve_context_bundle`)도 동일 `corpus/`를 인덱싱해 `kind=corpus` 검색이 가능합니다.
+
+### World Authoring Compile
+
+`compile` 명령은 작성용 세계관 JSON을 런타임 pack으로 반영하고 manifest checksum을 갱신합니다.
+
+```bash
+python -m project_dream.cli compile --authoring-dir authoring --packs-dir packs
+```
+
+입력 우선순위:
+
+- `authoring/world_master.json` (`world_master.v1`, 대량 세계관 작성용)
+- `authoring/world_pack.json` (`world_schema.v1`, 단일 파일)
+- split files (`world_meta.json`, `world_entities.json` 등)
+
+`world_master.v1` 템플릿은 `examples/world_master_template.json`를 참고하면 됩니다.
 
 ### Run Tests With Gemini 3.1 Flash
 

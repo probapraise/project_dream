@@ -568,6 +568,9 @@ def load_packs(base_dir: Path, enforce_phase1_minimums: bool = False) -> LoadedP
         "timeline_events": world_timeline_events,
         "world_rules": world_rules,
         "glossary": world_glossary,
+        "extensions": dict(world_pack.get("extensions", {}))
+        if isinstance(world_pack.get("extensions"), dict)
+        else {},
     }
 
     packs = LoadedPacks(

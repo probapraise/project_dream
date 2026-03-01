@@ -1,0 +1,163 @@
+{
+  "schema_version": "world_master.v1",
+  "version": "1.0.0",
+  "forbidden_terms": [
+    "실명 주소"
+  ],
+  "relation_conflict_rules": [
+    {
+      "id": "WCR-001",
+      "relation_type_a": "allied_with",
+      "relation_type_b": "hostile_to"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "WN-CHAR-001",
+      "kind": "character",
+      "name": "주인공 이름",
+      "summary": "핵심 인물",
+      "tags": [
+        "protagonist"
+      ],
+      "aliases": [],
+      "linked_org_id": "",
+      "linked_char_id": "",
+      "linked_board_id": "",
+      "attributes": {
+        "house_id": "WN-FAMILY-001",
+        "rank": "student"
+      },
+      "source": "worldbible.v4.3",
+      "valid_from": "Y160",
+      "valid_to": "",
+      "evidence_grade": "A",
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "WN-FAMILY-001",
+      "kind": "family",
+      "name": "OO 백작가",
+      "summary": "귀족 가문",
+      "tags": [
+        "noble"
+      ],
+      "aliases": [],
+      "linked_org_id": "",
+      "linked_char_id": "",
+      "linked_board_id": "",
+      "attributes": {
+        "crest_arcana": "enabled"
+      },
+      "source": "worldbible.v4.3",
+      "valid_from": "Y0",
+      "valid_to": "",
+      "evidence_grade": "A",
+      "visibility": "PUBLIC"
+    }
+  ],
+  "edges": [
+    {
+      "id": "WE-001",
+      "relation_type": "belongs_to_family",
+      "from_id": "WN-CHAR-001",
+      "to_id": "WN-FAMILY-001",
+      "notes": "혈통 관계",
+      "qualifiers": {
+        "line": "secondary"
+      },
+      "source": "worldbible.v4.3",
+      "valid_from": "Y160",
+      "valid_to": "",
+      "evidence_grade": "A",
+      "visibility": "PUBLIC"
+    }
+  ],
+  "events": [
+    {
+      "id": "WV-001",
+      "title": "핵심 사건",
+      "summary": "연표 이벤트 요약",
+      "era": "Y160",
+      "participant_ids": [
+        "WN-CHAR-001"
+      ],
+      "location_id": "",
+      "trigger_ids": [],
+      "consequence_ids": [
+        "WE-001"
+      ],
+      "source": "worldbible.v4.3",
+      "valid_from": "Y160",
+      "valid_to": "",
+      "evidence_grade": "B",
+      "visibility": "PUBLIC"
+    }
+  ],
+  "rules": [
+    {
+      "id": "WRULE-001",
+      "name": "규칙 이름",
+      "category": "academy-law",
+      "description": "규칙 설명",
+      "scope_ids": [
+        "WN-FAMILY-001"
+      ],
+      "source": "worldbible.v4.3",
+      "valid_from": "Y0",
+      "valid_to": "",
+      "evidence_grade": "A",
+      "visibility": "PUBLIC"
+    }
+  ],
+  "glossary": [
+    {
+      "id": "WG-001",
+      "term": "용어",
+      "definition": "정의",
+      "aliases": [],
+      "source": "worldbible.v4.3",
+      "valid_from": "Y0",
+      "valid_to": "",
+      "evidence_grade": "A",
+      "visibility": "PUBLIC"
+    }
+  ],
+  "source_documents": [
+    {
+      "id": "SRC-WB-001",
+      "title": "WorldBible v4.3",
+      "source_type": "docx",
+      "locator": "월드바이블/WorldBible_Pramisio_ArchivePlaza_v4_3_20260226_renamed.docx",
+      "published_at": "2026-02-26",
+      "trust_level": "A"
+    }
+  ],
+  "claims": [
+    {
+      "id": "CLM-001",
+      "subject_id": "WN-CHAR-001",
+      "predicate": "has_external_memory",
+      "object_id": "",
+      "object_literal": "true",
+      "evidence_source_ids": [
+        "SRC-WB-001"
+      ],
+      "confidence": 0.95,
+      "source": "worldbible.v4.3",
+      "valid_from": "Y160",
+      "valid_to": "",
+      "evidence_grade": "A",
+      "visibility": "META"
+    }
+  ],
+  "taxonomy_terms": [
+    {
+      "id": "TAX-NODE-001",
+      "taxonomy": "node_kind",
+      "label": "character",
+      "parent_id": "",
+      "description": "개별 인물"
+    }
+  ]
+}

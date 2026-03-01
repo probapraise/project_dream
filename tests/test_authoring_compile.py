@@ -196,3 +196,178 @@ def test_compile_world_pack_requires_authoring_source(tmp_path: Path):
         compile_world_pack(authoring_dir=authoring_dir, packs_dir=packs_dir)
 
     assert "No world authoring source" in str(exc.value)
+
+
+def test_compile_world_pack_from_world_master_schema(tmp_path: Path):
+    packs_dir = _copy_packs(tmp_path)
+    authoring_dir = tmp_path / "authoring"
+    authoring_dir.mkdir(parents=True, exist_ok=True)
+
+    world_master = {
+        "schema_version": "world_master.v1",
+        "version": "4.3.0",
+        "forbidden_terms": ["실명 주소"],
+        "relation_conflict_rules": [
+            {
+                "id": "WCR-MASTER-001",
+                "relation_type_a": "allied_with",
+                "relation_type_b": "hostile_to",
+            }
+        ],
+        "nodes": [
+            {
+                "id": "WN-CHAR-001",
+                "kind": "character",
+                "name": "크리스티안",
+                "summary": "주인공",
+                "tags": ["protagonist", "noble"],
+                "aliases": ["차남"],
+                "linked_char_id": "",
+                "source": "worldbible.v4.3",
+                "valid_from": "Y160",
+                "valid_to": "",
+                "evidence_grade": "A",
+                "visibility": "PUBLIC",
+                "attributes": {"house": "WN-FAMILY-001"},
+            },
+            {
+                "id": "WN-FAMILY-001",
+                "kind": "family",
+                "name": "OO 백작가",
+                "summary": "왕국 귀족 가문",
+                "tags": ["noble", "crest_arcana"],
+                "aliases": [],
+                "source": "worldbible.v4.3",
+                "valid_from": "Y0",
+                "valid_to": "",
+                "evidence_grade": "A",
+                "visibility": "PUBLIC",
+                "attributes": {"rank": "count"},
+            },
+            {
+                "id": "WN-SPECIES-ELF",
+                "kind": "species",
+                "name": "엘프",
+                "summary": "이르민수를 수호하는 종족",
+                "tags": ["species", "guardian"],
+                "aliases": [],
+                "source": "worldbible.v4.3",
+                "valid_from": "Y0",
+                "valid_to": "",
+                "evidence_grade": "A",
+                "visibility": "PUBLIC",
+                "attributes": {"lifespan_tier": "long"},
+            },
+        ],
+        "edges": [
+            {
+                "id": "WE-HOUSE-001",
+                "relation_type": "belongs_to_family",
+                "from_id": "WN-CHAR-001",
+                "to_id": "WN-FAMILY-001",
+                "notes": "혈통 관계",
+                "qualifiers": {"line": "secondary"},
+                "source": "worldbible.v4.3",
+                "valid_from": "Y160",
+                "valid_to": "",
+                "evidence_grade": "A",
+                "visibility": "PUBLIC",
+            }
+        ],
+        "events": [
+            {
+                "id": "WV-AWAKEN-001",
+                "title": "각성 사건",
+                "summary": "주인공이 외부 기억을 자각",
+                "era": "Y160",
+                "participant_ids": ["WN-CHAR-001"],
+                "location_id": "",
+                "trigger_ids": [],
+                "consequence_ids": ["WE-HOUSE-001"],
+                "source": "worldbible.v4.3",
+                "valid_from": "Y160",
+                "valid_to": "",
+                "evidence_grade": "B",
+                "visibility": "META",
+            }
+        ],
+        "rules": [
+            {
+                "id": "WRULE-001",
+                "name": "문장비전 혈통잠금",
+                "category": "magic-law",
+                "description": "가문 혈통키가 없는 경우 문장비전 시전 불가",
+                "scope_ids": ["WN-FAMILY-001"],
+                "source": "worldbible.v4.3",
+                "valid_from": "Y0",
+                "valid_to": "",
+                "evidence_grade": "A",
+                "visibility": "PUBLIC",
+            }
+        ],
+        "glossary": [
+            {
+                "id": "WG-MASTER-001",
+                "term": "문장비전",
+                "definition": "혈통 잠금 학파",
+                "aliases": ["Crest Arcana"],
+                "source": "worldbible.v4.3",
+                "valid_from": "Y0",
+                "valid_to": "",
+                "evidence_grade": "A",
+                "visibility": "PUBLIC",
+            }
+        ],
+        "source_documents": [
+            {
+                "id": "SRC-WB-4.3",
+                "title": "WorldBible v4.3",
+                "source_type": "docx",
+                "locator": "월드바이블/WorldBible_Pramisio_ArchivePlaza_v4_3_20260226_renamed.docx",
+                "published_at": "2026-02-26",
+                "trust_level": "A",
+            }
+        ],
+        "claims": [
+            {
+                "id": "CLM-001",
+                "subject_id": "WN-CHAR-001",
+                "predicate": "awakens_with_external_memory",
+                "object_id": "",
+                "object_literal": "true",
+                "evidence_source_ids": ["SRC-WB-4.3"],
+                "confidence": 0.95,
+                "source": "worldbible.v4.3",
+                "valid_from": "Y160",
+                "valid_to": "",
+                "evidence_grade": "A",
+                "visibility": "META",
+            }
+        ],
+        "taxonomy_terms": [
+            {
+                "id": "TAX-NODE-KIND-001",
+                "taxonomy": "node_kind",
+                "label": "character",
+                "parent_id": "",
+                "description": "개별 인물",
+            }
+        ],
+    }
+    _write_json(authoring_dir / "world_master.json", world_master)
+
+    summary = compile_world_pack(authoring_dir=authoring_dir, packs_dir=packs_dir)
+
+    assert summary["source_mode"] == "master"
+    compiled_world = _read_json(packs_dir / "world_pack.json")
+    assert compiled_world["schema_version"] == "world_schema.v1"
+    assert compiled_world["version"] == "4.3.0"
+    assert any(row["id"] == "WN-SPECIES-ELF" for row in compiled_world["entities"])
+    assert any(row["id"] == "WE-HOUSE-001" for row in compiled_world["relations"])
+    assert "extensions" in compiled_world
+    assert "world_master" in compiled_world["extensions"]
+    assert compiled_world["extensions"]["world_master"]["schema_version"] == "world_master.v1"
+    assert compiled_world["extensions"]["world_master"]["claims"]
+
+    loaded = load_packs(packs_dir)
+    assert loaded.world_schema["extensions"]["world_master"]["claims"]

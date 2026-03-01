@@ -6,8 +6,10 @@ from typing import Any
 
 from project_dream.pack_schemas import WorldPackPayload, validate_pack_payload
 from project_dream.pack_service import write_pack_manifest
+from project_dream.world_master_schema import project_world_master_to_world_pack
 
 _WORLD_MONOLITHIC_FILE = "world_pack.json"
+_WORLD_MASTER_FILE = "world_master.json"
 _WORLD_META_FILE = "world_meta.json"
 _WORLD_SPLIT_FILES = {
     "entities": "world_entities.json",
@@ -54,6 +56,16 @@ def _load_monolithic(authoring_dir: Path) -> tuple[str, dict] | None:
     return "monolithic", payload
 
 
+def _load_world_master(authoring_dir: Path) -> tuple[str, dict] | None:
+    source_path = authoring_dir / _WORLD_MASTER_FILE
+    if not source_path.exists():
+        return None
+    payload = _read_json(source_path)
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected object JSON: {source_path}")
+    return "master", project_world_master_to_world_pack(payload)
+
+
 def _load_split(authoring_dir: Path) -> tuple[str, dict] | None:
     meta = _read_dict_or_empty(authoring_dir / _WORLD_META_FILE)
     payload = {
@@ -90,6 +102,9 @@ def _load_split(authoring_dir: Path) -> tuple[str, dict] | None:
 
 
 def _load_world_authoring(authoring_dir: Path) -> tuple[str, dict]:
+    master = _load_world_master(authoring_dir)
+    if master is not None:
+        return master
     monolithic = _load_monolithic(authoring_dir)
     if monolithic is not None:
         return monolithic
@@ -98,7 +113,7 @@ def _load_world_authoring(authoring_dir: Path) -> tuple[str, dict]:
         return split
     raise ValueError(
         "No world authoring source found. Provide authoring/world_pack.json "
-        "or split files (world_meta.json + world_*.json)."
+        "or authoring/world_master.json or split files (world_meta.json + world_*.json)."
     )
 
 

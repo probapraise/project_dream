@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal, TypeVar
+from typing import Any, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError
 
@@ -309,6 +309,7 @@ class WorldPackPayload(_StrictModel):
     timeline_events: list[WorldTimelineEventRow] = Field(default_factory=list)
     world_rules: list[WorldRuleRow] = Field(default_factory=list)
     glossary: list[WorldGlossaryRow] = Field(default_factory=list)
+    extensions: dict[StrictStr, Any] = Field(default_factory=dict)
 
 
 _ModelT = TypeVar("_ModelT", bound=BaseModel)

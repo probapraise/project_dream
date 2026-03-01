@@ -98,6 +98,7 @@ def test_pack_service_loads_world_schema_v1_contract():
     assert packs.world_schema["world_rules"]
     assert isinstance(packs.world_schema.get("glossary"), list)
     assert packs.world_schema["glossary"]
+    assert isinstance(packs.world_schema.get("extensions"), dict)
 
     first_entity = packs.world_schema["entities"][0]
     assert "source" in first_entity
