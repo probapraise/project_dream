@@ -40,6 +40,7 @@ _DIAL_AXIS_NAME_HINTS = {
     "S": ("규정", "징계", "잠입", "추적"),
     "H": ("풍자", "리믹스", "밈", "패러디"),
 }
+_MODERATION_ACTION_TYPES = {"HIDE_PREVIEW", "LOCK_THREAD", "GHOST_THREAD", "SANCTION_USER"}
 
 
 class ThreadCandidateStagePayload(TypedDict):
@@ -537,6 +538,78 @@ def _collect_flow_escalation_events(
                 "reason_rule_id": str(rule.get("reason_rule_id", "RULE-PLZ-UI-01")),
                 "status": status,
                 "total_reports": total_reports,
+            }
+        )
+    return events
+
+
+def _collect_dispute_hook_events(
+    *,
+    round_idx: int,
+    status: str,
+    moderation_action: str,
+    seed_id: str,
+    total_reports: int,
+    evidence_grade: str,
+    evidence_hours_left: int,
+) -> list[dict]:
+    active_statuses = {"hidden", "locked", "ghost", "sanctioned"}
+    engaged = moderation_action in _MODERATION_ACTION_TYPES or status in active_statuses
+    if not engaged:
+        return []
+
+    grade = str(evidence_grade).strip().upper()
+    time_risk = int(evidence_hours_left) <= 24
+    evidence_risk = grade == "C" or time_risk
+    events: list[dict] = [
+        {
+            "round": round_idx,
+            "action_type": "APPEAL_TIMER_TICK",
+            "actor_id": "system",
+            "target_id": seed_id,
+            "reason_rule_id": "RULE-PLZ-SAN-02",
+            "status": status,
+            "total_reports": total_reports,
+            "appeal_due_hours": max(0, int(evidence_hours_left)),
+        }
+    ]
+
+    if status in active_statuses or total_reports >= 8:
+        events.append(
+            {
+                "round": round_idx,
+                "action_type": "APPEAL_FILED",
+                "actor_id": "community",
+                "target_id": seed_id,
+                "reason_rule_id": "RULE-PLZ-SAN-02",
+                "status": status,
+                "total_reports": total_reports,
+            }
+        )
+    if evidence_risk:
+        events.append(
+            {
+                "round": round_idx,
+                "action_type": "APPEAL_DELAY",
+                "actor_id": "system",
+                "target_id": seed_id,
+                "reason_rule_id": "RULE-PLZ-SAN-03",
+                "status": status,
+                "total_reports": total_reports,
+                "evidence_grade": grade,
+                "evidence_hours_left": max(0, int(evidence_hours_left)),
+            }
+        )
+    if moderation_action in _MODERATION_ACTION_TYPES and evidence_risk:
+        events.append(
+            {
+                "round": round_idx,
+                "action_type": "CONSPIRACY_BACKLASH",
+                "actor_id": "community",
+                "target_id": seed_id,
+                "reason_rule_id": "RULE-PLZ-MOD-03",
+                "status": status,
+                "trigger_action": moderation_action,
             }
         )
     return events
@@ -1049,6 +1122,16 @@ def run_simulation(
             fired_actions=fired_flow_actions,
         )
         action_logs.extend(flow_events)
+        dispute_hook_events = _collect_dispute_hook_events(
+            round_idx=round_idx,
+            status=status,
+            moderation_action=round_action,
+            seed_id=seed.seed_id,
+            total_reports=total_reports,
+            evidence_grade=evidence_grade,
+            evidence_hours_left=evidence_hours_left,
+        )
+        action_logs.extend(dispute_hook_events)
 
         moderation_decisions.append(
             {

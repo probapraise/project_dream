@@ -130,3 +130,23 @@ def test_report_v1_includes_evidence_watch_fields():
     assert watch["type"] == "rumor_capture"
     assert watch["expires_in_hours"] == 12
     assert any(item["category"] == "evidence" for item in report["risk_checks"])
+
+
+def test_report_v1_includes_moderation_backlash_highlight_when_moderation_occurs():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    seed = SeedInput(
+        seed_id="SEED-RPT-MOD-001",
+        title="운영 개입 반발 하이라이트",
+        summary="운영 개입 뒤 음모론/반발 연결 하이라이트를 보장한다",
+        board_id="B07",
+        zone_id="D",
+        evidence_grade="C",
+        evidence_type="rumor_capture",
+        evidence_expiry_hours=12,
+    )
+    sim_result = run_simulation(seed=seed, rounds=5, corpus=["샘플"], max_retries=0, packs=packs)
+
+    report = build_report_v1(seed, sim_result, packs)
+
+    assert any(item.get("tag") == "moderation_backlash" for item in report["highlights_top10"])
+    assert any("운영개입" in str(item.get("text", "")) for item in report["highlights_top10"])

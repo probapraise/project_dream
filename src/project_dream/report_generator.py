@@ -5,6 +5,9 @@ from project_dream.models import ReportConflictMap, ReportRiskCheck, ReportV1
 from project_dream.prompt_templates import render_prompt
 from project_dream.report_gate import run_report_gate
 
+_MODERATION_ACTION_TYPES = {"HIDE_PREVIEW", "LOCK_THREAD", "GHOST_THREAD", "SANCTION_USER"}
+_DISPUTE_ACTION_TYPES = {"APPEAL_TIMER_TICK", "APPEAL_FILED", "APPEAL_DELAY", "CONSPIRACY_BACKLASH"}
+
 
 def _build_lens_summaries(sim_result: dict, packs) -> list[dict]:
     rounds = sim_result.get("rounds", [])
@@ -28,7 +31,7 @@ def _build_lens_summaries(sim_result: dict, packs) -> list[dict]:
 def _build_highlights_top10(sim_result: dict) -> list[dict]:
     rounds = sim_result.get("rounds", [])
     ranked = sorted(rounds, key=lambda row: row.get("score", 0), reverse=True)
-    return [
+    highlights = [
         {
             "round": row["round"],
             "persona_id": row["persona_id"],
@@ -38,6 +41,47 @@ def _build_highlights_top10(sim_result: dict) -> list[dict]:
         }
         for row in ranked[:10]
     ]
+    action_logs = sim_result.get("action_logs", [])
+    moderation_row = next(
+        (
+            row
+            for row in action_logs
+            if str(row.get("action_type", "")).strip() in _MODERATION_ACTION_TYPES
+        ),
+        None,
+    )
+    if moderation_row is not None:
+        moderation_round = int(moderation_row.get("round", 0) or 0)
+        linked_dispute = next(
+            (
+                row
+                for row in action_logs
+                if str(row.get("action_type", "")).strip() in _DISPUTE_ACTION_TYPES
+                and int(row.get("round", 0) or 0) >= moderation_round
+            ),
+            None,
+        )
+        dispute_signal = (
+            str(linked_dispute.get("action_type", "")).strip()
+            if isinstance(linked_dispute, dict)
+            else "COMMUNITY_BACKLASH"
+        )
+        highlights = [
+            {
+                "round": moderation_round or 1,
+                "persona_id": "system",
+                "community_id": str(moderation_row.get("community_id", "MODERATION")),
+                "score": 10000.0,
+                "text": (
+                    f"운영개입({moderation_row.get('action_type')}) 이후 "
+                    f"{dispute_signal} 신호가 확산됨"
+                ),
+                "tag": "moderation_backlash",
+                "action_type": str(moderation_row.get("action_type", "")).strip(),
+                "linked_dispute_action": dispute_signal,
+            }
+        ] + highlights
+    return highlights[:10]
 
 
 def _build_conflict_map(sim_result: dict) -> ReportConflictMap:

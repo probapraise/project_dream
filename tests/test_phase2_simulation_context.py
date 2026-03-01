@@ -343,3 +343,28 @@ def test_simulation_passes_pack_gate_policy_into_gate_pipeline(monkeypatch):
 
     assert captured_gate_policies
     assert captured_gate_policies[0] == packs.gate_policy
+
+
+def test_simulation_emits_dispute_hooks_when_moderation_and_evidence_risk_overlap():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    seed = SeedInput(
+        seed_id="SEED-DISPUTE-001",
+        title="운영 개입 분쟁 훅 테스트",
+        summary="운영 개입 뒤 반발/항소 루프가 발생해야 한다",
+        board_id="B07",
+        zone_id="D",
+        evidence_grade="C",
+        evidence_type="rumor_capture",
+        evidence_expiry_hours=12,
+    )
+
+    result = run_simulation(seed=seed, rounds=5, corpus=["샘플"], max_retries=0, packs=packs)
+    action_types = [str(row.get("action_type", "")) for row in result.get("action_logs", [])]
+
+    assert any(
+        action in {"HIDE_PREVIEW", "LOCK_THREAD", "GHOST_THREAD", "SANCTION_USER"}
+        for action in action_types
+    )
+    assert "APPEAL_TIMER_TICK" in action_types
+    assert "APPEAL_DELAY" in action_types
+    assert "CONSPIRACY_BACKLASH" in action_types
