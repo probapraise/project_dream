@@ -46,12 +46,17 @@ def test_pack_service_loads_gate_policy_from_rule_pack():
     assert isinstance(packs.gate_policy, dict)
     assert "safety" in packs.gate_policy
     assert "lore" in packs.gate_policy
+    assert "similarity" in packs.gate_policy
 
     safety = packs.gate_policy["safety"]
     lore = packs.gate_policy["lore"]
+    similarity = packs.gate_policy["similarity"]
     assert isinstance(safety.get("taboo_words"), list)
     assert isinstance(lore.get("evidence_keywords"), list)
     assert isinstance(lore.get("contradiction_term_groups"), list)
+    assert isinstance(lore.get("claim_markers"), list)
+    assert isinstance(lore.get("moderation_keywords"), list)
+    assert isinstance(similarity.get("rule_ids"), dict)
 
 
 def test_pack_service_exposes_manifest_and_fingerprint():

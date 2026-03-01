@@ -114,6 +114,23 @@ def test_load_packs_rejects_invalid_gate_policy_keyword_type(tmp_path: Path):
     assert "evidence_keywords" in str(exc.value)
 
 
+def test_load_packs_rejects_invalid_gate_policy_similarity_rule_id_type(tmp_path: Path):
+    packs_dir = _copy_packs(tmp_path)
+    rule_path = packs_dir / "rule_pack.json"
+    payload = _read_json(rule_path)
+    payload["gate_policy"]["similarity"] = {
+        "rule_ids": {
+            "over_threshold": 101,
+        }
+    }
+    _write_json(rule_path, payload)
+
+    with pytest.raises(ValueError) as exc:
+        load_packs(packs_dir)
+
+    assert "over_threshold" in str(exc.value)
+
+
 def test_load_packs_rejects_manifest_checksum_mismatch(tmp_path: Path):
     packs_dir = _copy_packs(tmp_path)
     manifest_path = packs_dir / "pack_manifest.json"

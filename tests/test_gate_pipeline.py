@@ -54,3 +54,51 @@ def test_gate_pipeline_uses_pack_policy_for_taboo_words():
     blocked_gate = next(g for g in blocked["gates"] if g["gate_name"] == "safety")
     assert blocked_gate["passed"] is False
     assert any(code == "TABOO_TERM:절대금지어" for code in blocked_gate["warnings"])
+
+
+def test_gate_pipeline_uses_pack_policy_for_similarity_rule_id():
+    custom_policy = {
+        "similarity": {
+            "rule_ids": {
+                "over_threshold": "RULE-CUSTOM-SIM-01",
+            }
+        }
+    }
+
+    result = run_gates(
+        "같은 문장",
+        corpus=["같은 문장"],
+        similarity_threshold=85,
+        gate_policy=custom_policy,
+    )
+
+    similarity_gate = next(g for g in result["gates"] if g["gate_name"] == "similarity")
+    assert similarity_gate["passed"] is False
+    assert any(item["rule_id"] == "RULE-CUSTOM-SIM-01" for item in similarity_gate["violations"])
+
+
+def test_gate_pipeline_uses_pack_policy_for_claim_and_moderation_markers():
+    custom_policy = {
+        "lore": {
+            "evidence_keywords": ["팩근거"],
+            "context_keywords": [],
+            "claim_markers": ["판결문구"],
+            "moderation_keywords": ["중재봇"],
+            "contradiction_term_groups": [],
+            "rule_ids": {
+                "evidence_missing": "RULE-PLZ-LORE-01",
+                "consistency_conflict": "RULE-PLZ-LORE-02",
+            },
+        }
+    }
+    result = run_gates(
+        "중재봇이 판결문구를 근거 없이 선언했다",
+        corpus=[],
+        gate_policy=custom_policy,
+    )
+
+    lore_gate = next(g for g in result["gates"] if g["gate_name"] == "lore")
+    assert lore_gate["passed"] is False
+    first_violation = lore_gate["violations"][0]
+    assert "ENT-CLAIM" in first_violation.get("entity_refs", [])
+    assert "ENT-MODERATION" in first_violation.get("entity_refs", [])

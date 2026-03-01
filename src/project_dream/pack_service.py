@@ -269,6 +269,7 @@ def _normalize_comment_flow(flow: dict) -> dict:
 def _normalize_gate_policy(raw_policy: dict) -> dict:
     safety_raw = raw_policy.get("safety", {}) if isinstance(raw_policy, dict) else {}
     lore_raw = raw_policy.get("lore", {}) if isinstance(raw_policy, dict) else {}
+    similarity_raw = raw_policy.get("similarity", {}) if isinstance(raw_policy, dict) else {}
     contradiction_groups_raw = (
         lore_raw.get("contradiction_term_groups", [])
         if isinstance(lore_raw, dict)
@@ -294,6 +295,12 @@ def _normalize_gate_policy(raw_policy: dict) -> dict:
     context_keywords = _as_str_list(lore_raw.get("context_keywords"))
     if not context_keywords:
         context_keywords = ["주장", "판단", "사실", "정황", "의혹"]
+    claim_markers = _as_str_list(lore_raw.get("claim_markers"))
+    if not claim_markers:
+        claim_markers = ["확정", "추정", "의혹", "단정"]
+    moderation_keywords = _as_str_list(lore_raw.get("moderation_keywords"))
+    if not moderation_keywords:
+        moderation_keywords = ["운영", "관리자", "모더레이터"]
     if not contradiction_term_groups:
         contradiction_term_groups = [
             {"positives": ["확정", "단정"], "negatives": ["추정", "의혹", "가능성"]},
@@ -312,9 +319,16 @@ def _normalize_gate_policy(raw_policy: dict) -> dict:
         "lore": {
             "evidence_keywords": evidence_keywords,
             "context_keywords": context_keywords,
+            "claim_markers": claim_markers,
+            "moderation_keywords": moderation_keywords,
             "contradiction_term_groups": contradiction_term_groups,
             "rule_ids": dict(lore_raw.get("rule_ids", {}))
             if isinstance(lore_raw.get("rule_ids"), dict)
+            else {},
+        },
+        "similarity": {
+            "rule_ids": dict(similarity_raw.get("rule_ids", {}))
+            if isinstance(similarity_raw.get("rule_ids"), dict)
             else {},
         },
     }

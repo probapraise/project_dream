@@ -47,6 +47,10 @@ class GateLoreRuleIds(_StrictModel):
     consistency_conflict: StrictStr = "RULE-PLZ-LORE-02"
 
 
+class GateSimilarityRuleIds(_StrictModel):
+    over_threshold: StrictStr = "RULE-PLZ-SIM-01"
+
+
 class ContradictionTermGroup(_StrictModel):
     positives: list[StrictStr] = Field(default_factory=list)
     negatives: list[StrictStr] = Field(default_factory=list)
@@ -67,6 +71,12 @@ class GateLorePolicy(_StrictModel):
     context_keywords: list[StrictStr] = Field(
         default_factory=lambda: ["주장", "판단", "사실", "정황", "의혹"]
     )
+    claim_markers: list[StrictStr] = Field(
+        default_factory=lambda: ["확정", "추정", "의혹", "단정"]
+    )
+    moderation_keywords: list[StrictStr] = Field(
+        default_factory=lambda: ["운영", "관리자", "모더레이터"]
+    )
     contradiction_term_groups: list[ContradictionTermGroup] = Field(
         default_factory=lambda: [
             ContradictionTermGroup(positives=["확정", "단정"], negatives=["추정", "의혹", "가능성"]),
@@ -76,9 +86,14 @@ class GateLorePolicy(_StrictModel):
     rule_ids: GateLoreRuleIds = Field(default_factory=GateLoreRuleIds)
 
 
+class GateSimilarityPolicy(_StrictModel):
+    rule_ids: GateSimilarityRuleIds = Field(default_factory=GateSimilarityRuleIds)
+
+
 class GatePolicy(_StrictModel):
     safety: GateSafetyPolicy = Field(default_factory=GateSafetyPolicy)
     lore: GateLorePolicy = Field(default_factory=GateLorePolicy)
+    similarity: GateSimilarityPolicy = Field(default_factory=GateSimilarityPolicy)
 
 
 class OrgRow(_StrictModel):

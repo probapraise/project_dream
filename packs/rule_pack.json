@@ -13,6 +13,8 @@
     "lore": {
       "evidence_keywords": ["정본", "증거", "로그", "출처", "근거"],
       "context_keywords": ["주장", "판단", "사실", "정황", "의혹"],
+      "claim_markers": ["확정", "추정", "의혹", "단정"],
+      "moderation_keywords": ["운영", "관리자", "모더레이터"],
       "contradiction_term_groups": [
         {"positives": ["확정", "단정"], "negatives": ["추정", "의혹", "가능성"]},
         {"positives": ["사실"], "negatives": ["루머", "소문"]}
@@ -20,6 +22,11 @@
       "rule_ids": {
         "evidence_missing": "RULE-PLZ-LORE-01",
         "consistency_conflict": "RULE-PLZ-LORE-02"
+      }
+    },
+    "similarity": {
+      "rule_ids": {
+        "over_threshold": "RULE-PLZ-SIM-01"
       }
     }
   },

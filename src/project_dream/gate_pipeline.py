@@ -18,6 +18,8 @@ DEFAULT_GATE_POLICY = {
     "lore": {
         "evidence_keywords": ["정본", "증거", "로그", "출처", "근거"],
         "context_keywords": ["주장", "판단", "사실", "정황", "의혹"],
+        "claim_markers": ["확정", "추정", "의혹", "단정"],
+        "moderation_keywords": ["운영", "관리자", "모더레이터"],
         "contradiction_term_groups": [
             {"positives": ["확정", "단정"], "negatives": ["추정", "의혹", "가능성"]},
             {"positives": ["사실"], "negatives": ["루머", "소문"]},
@@ -25,6 +27,11 @@ DEFAULT_GATE_POLICY = {
         "rule_ids": {
             "evidence_missing": "RULE-PLZ-LORE-01",
             "consistency_conflict": "RULE-PLZ-LORE-02",
+        },
+    },
+    "similarity": {
+        "rule_ids": {
+            "over_threshold": "RULE-PLZ-SIM-01",
         },
     },
 }
@@ -84,6 +91,12 @@ def _resolve_gate_policy(gate_policy: dict | None) -> dict:
         context_keywords = _as_str_list(lore.get("context_keywords"))
         if context_keywords:
             resolved["lore"]["context_keywords"] = context_keywords
+        claim_markers = _as_str_list(lore.get("claim_markers"))
+        if claim_markers:
+            resolved["lore"]["claim_markers"] = claim_markers
+        moderation_keywords = _as_str_list(lore.get("moderation_keywords"))
+        if moderation_keywords:
+            resolved["lore"]["moderation_keywords"] = moderation_keywords
         contradiction_groups = _normalize_contradiction_term_groups(lore.get("contradiction_term_groups"))
         if contradiction_groups:
             resolved["lore"]["contradiction_term_groups"] = [
@@ -96,6 +109,14 @@ def _resolve_gate_policy(gate_policy: dict | None) -> dict:
                 value = str(rule_ids.get(key, "")).strip()
                 if value:
                     resolved["lore"]["rule_ids"][key] = value
+
+    similarity = gate_policy.get("similarity")
+    if isinstance(similarity, dict):
+        rule_ids = similarity.get("rule_ids")
+        if isinstance(rule_ids, dict):
+            value = str(rule_ids.get("over_threshold", "")).strip()
+            if value:
+                resolved["similarity"]["rule_ids"]["over_threshold"] = value
 
     return resolved
 
@@ -133,20 +154,20 @@ def _entity_refs_from_text(
     phone_pattern: re.Pattern[str],
     evidence_keywords: list[str],
     context_keywords: list[str],
+    claim_markers: list[str],
     taboo_words: list[str],
+    moderation_keywords: list[str],
 ) -> list[str]:
     refs: set[str] = set()
     if phone_pattern.search(text):
         refs.add("ENT-CONTACT")
     if any(keyword in text for keyword in evidence_keywords):
         refs.add("ENT-EVIDENCE")
-    if any(keyword in text for keyword in context_keywords) or any(
-        marker in text for marker in ("확정", "추정", "의혹", "단정")
-    ):
+    if any(keyword in text for keyword in context_keywords) or any(marker in text for marker in claim_markers):
         refs.add("ENT-CLAIM")
     if any(word in text for word in taboo_words):
         refs.add("ENT-SAFETY-LANGUAGE")
-    if any(word in text for word in ("운영", "관리자", "모더레이터")):
+    if any(word in text for word in moderation_keywords):
         refs.add("ENT-MODERATION")
     return sorted(refs)
 
@@ -159,7 +180,9 @@ def _run_consistency_checker(
     phone_pattern: re.Pattern[str],
     evidence_keywords: list[str],
     context_keywords: list[str],
+    claim_markers: list[str],
     taboo_words: list[str],
+    moderation_keywords: list[str],
 ) -> dict:
     issues: list[dict] = []
     refs = _entity_refs_from_text(
@@ -167,7 +190,9 @@ def _run_consistency_checker(
         phone_pattern=phone_pattern,
         evidence_keywords=evidence_keywords,
         context_keywords=context_keywords,
+        claim_markers=claim_markers,
         taboo_words=taboo_words,
+        moderation_keywords=moderation_keywords,
     )
     for positives, negatives in contradiction_term_groups:
         found_positive = next((term for term in positives if term in text), "")
@@ -208,6 +233,7 @@ def run_gates(
     resolved_policy = _resolve_gate_policy(gate_policy)
     safety_policy = resolved_policy.get("safety", {})
     lore_policy = resolved_policy.get("lore", {})
+    similarity_policy = resolved_policy.get("similarity", {})
     phone_pattern = _compile_phone_pattern(str(safety_policy.get("phone_pattern", "")))
     taboo_words = _as_str_list(safety_policy.get("taboo_words")) or _as_str_list(
         DEFAULT_GATE_POLICY["safety"]["taboo_words"]
@@ -218,11 +244,18 @@ def run_gates(
     context_keywords = _as_str_list(lore_policy.get("context_keywords")) or _as_str_list(
         DEFAULT_GATE_POLICY["lore"]["context_keywords"]
     )
+    claim_markers = _as_str_list(lore_policy.get("claim_markers")) or _as_str_list(
+        DEFAULT_GATE_POLICY["lore"]["claim_markers"]
+    )
+    moderation_keywords = _as_str_list(lore_policy.get("moderation_keywords")) or _as_str_list(
+        DEFAULT_GATE_POLICY["lore"]["moderation_keywords"]
+    )
     contradiction_term_groups = _normalize_contradiction_term_groups(
         lore_policy.get("contradiction_term_groups")
     ) or _normalize_contradiction_term_groups(DEFAULT_GATE_POLICY["lore"]["contradiction_term_groups"])
     safety_rule_ids = safety_policy.get("rule_ids", {})
     lore_rule_ids = lore_policy.get("rule_ids", {})
+    similarity_rule_ids = similarity_policy.get("rule_ids", {})
     pii_phone_rule_id = str(safety_rule_ids.get("pii_phone", "RULE-PLZ-SAFE-01")).strip() or "RULE-PLZ-SAFE-01"
     taboo_term_rule_id = str(safety_rule_ids.get("taboo_term", "RULE-PLZ-SAFE-02")).strip() or "RULE-PLZ-SAFE-02"
     seed_forbidden_rule_id = (
@@ -233,6 +266,9 @@ def run_gates(
     )
     consistency_conflict_rule_id = (
         str(lore_rule_ids.get("consistency_conflict", "RULE-PLZ-LORE-02")).strip() or "RULE-PLZ-LORE-02"
+    )
+    similarity_over_threshold_rule_id = (
+        str(similarity_rule_ids.get("over_threshold", "RULE-PLZ-SIM-01")).strip() or "RULE-PLZ-SIM-01"
     )
 
     # Gate 1: Safety
@@ -313,7 +349,7 @@ def run_gates(
         similarity_violations.append(
             _build_violation(
                 gate_name="similarity",
-                rule_id="RULE-PLZ-SIM-01",
+                rule_id=similarity_over_threshold_rule_id,
                 code="SIMILARITY_OVER_THRESHOLD",
                 message=f"유사도 임계치 초과: {max_sim} >= {similarity_threshold}",
                 severity="low",
@@ -341,7 +377,9 @@ def run_gates(
         phone_pattern=phone_pattern,
         evidence_keywords=evidence_keywords,
         context_keywords=context_keywords,
+        claim_markers=claim_markers,
         taboo_words=taboo_words,
+        moderation_keywords=moderation_keywords,
     )
     lore_violations: list[dict] = []
     checklist = {
@@ -364,7 +402,9 @@ def run_gates(
                             phone_pattern=phone_pattern,
                             evidence_keywords=evidence_keywords,
                             context_keywords=context_keywords,
+                            claim_markers=claim_markers,
                             taboo_words=taboo_words,
+                            moderation_keywords=moderation_keywords,
                         )
                     )
                 ),
