@@ -17,6 +17,7 @@ def test_render_markdown_contains_gate_and_totals():
             "seed_runs": 10,
             "eval_pass_runs": 10,
             "unique_communities": 4,
+            "story_checklist_pass_runs": 10,
             "register_switch_runs": 5,
             "register_switch_rate": 0.5,
         },
@@ -36,6 +37,7 @@ def test_render_markdown_contains_gate_and_totals():
     assert "PASS" in markdown
     assert "metric_set: `v2`" in markdown
     assert "seed_runs: `10`" in markdown
+    assert "story_checklist_pass_runs: `10`" in markdown
     assert "register_switch_runs: `5`" in markdown
     assert "register_switch_rate: `0.5`" in markdown
     assert "`format_missing_zero`" in markdown

@@ -88,6 +88,14 @@ def _has_stage_trace_ordering(eval_result: dict) -> bool:
     return False
 
 
+def _has_story_checklist_required_items(eval_result: dict) -> bool:
+    checks = eval_result.get("checks", [])
+    for check in checks:
+        if check.get("name") == "report.story_checklist.required_items":
+            return bool(check.get("passed"))
+    return False
+
+
 def _collect_register_switch_stats(sim_result: dict) -> tuple[int, dict[str, int]]:
     register_switch_rounds = 0
     register_rule_counts: dict[str, int] = {}
@@ -153,6 +161,7 @@ def run_regression_batch(
     stage_trace_coverage_sum = 0.0
     eval_pass_runs = 0
     report_gate_pass_runs = 0
+    story_checklist_pass_runs = 0
     register_switch_runs = 0
     register_switch_rounds = 0
     register_rule_counts_total: dict[str, int] = {}
@@ -200,6 +209,7 @@ def run_regression_batch(
         has_stage_trace = _has_stage_trace(eval_result)
         has_stage_trace_consistency = _has_stage_trace_consistency(eval_result)
         has_stage_trace_ordering = _has_stage_trace_ordering(eval_result)
+        has_story_checklist_required_items = _has_story_checklist_required_items(eval_result)
         stage_trace_coverage_rate = float(eval_result.get("metrics", {}).get("stage_trace_coverage_rate", 0.0))
         report_gate = report.get("report_gate", {}) if isinstance(report, dict) else {}
         has_report_gate_pass = bool(report_gate.get("pass_fail"))
@@ -217,6 +227,7 @@ def run_regression_batch(
         stage_trace_coverage_sum += stage_trace_coverage_rate
         eval_pass_runs += int(bool(eval_result.get("pass_fail")))
         report_gate_pass_runs += int(has_report_gate_pass)
+        story_checklist_pass_runs += int(has_story_checklist_required_items)
         register_switch_runs += int(has_register_switch)
         register_switch_rounds += run_register_switch_rounds
         for rule_id, count in run_register_rule_counts.items():
@@ -237,6 +248,7 @@ def run_regression_batch(
                 "has_stage_trace": has_stage_trace,
                 "has_stage_trace_consistency": has_stage_trace_consistency,
                 "has_stage_trace_ordering": has_stage_trace_ordering,
+                "has_story_checklist_required_items": has_story_checklist_required_items,
                 "stage_trace_coverage_rate": stage_trace_coverage_rate,
                 "has_report_gate_pass": has_report_gate_pass,
                 "has_register_switch": has_register_switch,
@@ -267,6 +279,7 @@ def run_regression_batch(
         "stage_trace_ordered_runs": stage_trace_ordered_runs == len(run_summaries),
         "stage_trace_coverage_rate": avg_stage_trace_coverage_rate >= 1.0,
         "report_gate_pass_runs": report_gate_pass_runs == len(run_summaries),
+        "story_checklist_pass_runs": story_checklist_pass_runs == len(run_summaries),
     }
     pass_fail = all(gates.values())
 
@@ -304,6 +317,7 @@ def run_regression_batch(
             "stage_trace_ordered_runs": stage_trace_ordered_runs,
             "avg_stage_trace_coverage_rate": avg_stage_trace_coverage_rate,
             "report_gate_pass_runs": report_gate_pass_runs,
+            "story_checklist_pass_runs": story_checklist_pass_runs,
             "register_switch_runs": register_switch_runs,
             "register_switch_rounds": register_switch_rounds,
             "register_switch_rate": register_switch_rate,

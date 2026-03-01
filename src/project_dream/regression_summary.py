@@ -28,6 +28,7 @@ def render_summary_markdown(summary: dict) -> str:
         f"- seed_runs: `{totals.get('seed_runs', 0)}`",
         f"- eval_pass_runs: `{totals.get('eval_pass_runs', 0)}`",
         f"- unique_communities: `{totals.get('unique_communities', 0)}`",
+        f"- story_checklist_pass_runs: `{totals.get('story_checklist_pass_runs', 0)}`",
         f"- register_switch_runs: `{totals.get('register_switch_runs', 0)}`",
         f"- register_switch_rate: `{totals.get('register_switch_rate', 0.0)}`",
         "",

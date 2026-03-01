@@ -48,6 +48,7 @@ def test_run_regression_batch_produces_summary_and_passes(tmp_path: Path):
     assert summary["totals"]["stage_trace_ordered_runs"] == 2
     assert summary["totals"]["avg_stage_trace_coverage_rate"] == pytest.approx(1.0)
     assert summary["totals"]["report_gate_pass_runs"] == 2
+    assert summary["totals"]["story_checklist_pass_runs"] == 2
     assert "register_switch_runs" in summary["totals"]
     assert "register_switch_rate" in summary["totals"]
     assert summary["totals"]["register_switch_rate"] == pytest.approx(
@@ -62,6 +63,7 @@ def test_run_regression_batch_produces_summary_and_passes(tmp_path: Path):
     assert summary["gates"]["stage_trace_ordered_runs"] is True
     assert summary["gates"]["stage_trace_coverage_rate"] is True
     assert summary["gates"]["report_gate_pass_runs"] is True
+    assert summary["gates"]["story_checklist_pass_runs"] is True
     summary_path = Path(summary["summary_path"])
     assert summary_path.exists()
 
@@ -307,3 +309,51 @@ def test_run_regression_batch_forwards_vector_backend_to_build_index(
 
     assert captured["vector_backend"] == "sqlite"
     assert captured["vector_db_path"] == vector_db_path
+
+
+def test_run_regression_batch_fails_when_story_checklist_check_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    seeds_dir = tmp_path / "seeds"
+    seeds_dir.mkdir(parents=True, exist_ok=True)
+    _write_seed(seeds_dir / "seed_001.json", "SEED-R-STORY-001", "B07", "D")
+
+    def fake_evaluate_run(run_dir: Path, metric_set: str = "v1") -> dict:
+        return {
+            "schema_version": "eval.v1",
+            "metric_set": metric_set,
+            "run_id": run_dir.name,
+            "seed_id": "SEED-R-STORY-001",
+            "pass_fail": True,
+            "checks": [
+                {"name": "runlog.context_trace_present", "passed": True, "details": "context_rows=1"},
+                {"name": "runlog.stage_trace_present", "passed": True, "details": "missing=[]"},
+                {"name": "runlog.stage_trace_consistency", "passed": True, "details": "ok"},
+                {"name": "runlog.stage_trace_ordering", "passed": True, "details": "ok"},
+                {
+                    "name": "report.story_checklist.required_items",
+                    "passed": False,
+                    "details": "missing=['meme']",
+                },
+            ],
+            "metrics": {"stage_trace_coverage_rate": 1.0},
+        }
+
+    monkeypatch.setattr(regression_runner, "evaluate_run", fake_evaluate_run, raising=False)
+
+    summary = run_regression_batch(
+        seeds_dir=seeds_dir,
+        packs_dir=Path("packs"),
+        output_dir=tmp_path / "runs",
+        rounds=3,
+        max_seeds=1,
+        metric_set="v1",
+        min_community_coverage=1,
+        min_conflict_frame_runs=0,
+        min_moderation_hook_runs=0,
+        min_validation_warning_runs=0,
+    )
+
+    assert summary["totals"]["story_checklist_pass_runs"] == 0
+    assert summary["gates"]["story_checklist_pass_runs"] is False
+    assert summary["pass_fail"] is False
