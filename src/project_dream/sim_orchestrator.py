@@ -52,6 +52,7 @@ class RoundLoopStagePayload(TypedDict):
     rounds: list[dict]
     gate_logs: list[dict]
     action_logs: list[dict]
+    cross_inflow_logs: list[dict]
     persona_memory: dict[str, list[str]]
 
 
@@ -135,6 +136,7 @@ def run_stage_node_round_loop(stage_payload: RoundLoopStagePayload | dict) -> Ro
         "rounds": _as_dict_list(payload.get("rounds")),
         "gate_logs": _as_dict_list(payload.get("gate_logs")),
         "action_logs": _as_dict_list(payload.get("action_logs")),
+        "cross_inflow_logs": _as_dict_list(payload.get("cross_inflow_logs")),
         "persona_memory": _normalize_persona_memory(payload.get("persona_memory")),
     }
 
@@ -342,6 +344,7 @@ def _resolve_template_context(packs, template_id: str, selected_title_pattern: s
         "title_pattern": selected_title_pattern or title_patterns[0],
         "trigger_tags": _as_str_list(template.get("trigger_tags")) or [f"template:{template_id.lower()}"],
         "taboos": _as_str_list(template.get("taboos")),
+        "crosspost_routes": _as_str_list(template.get("crosspost_routes")),
     }
 
 
@@ -613,6 +616,67 @@ def _collect_dispute_hook_events(
             }
         )
     return events
+
+
+def _select_cross_inflow_target_board(seed, template_context: dict) -> str:
+    routes = _as_str_list(template_context.get("crosspost_routes"))
+    for board_id in routes:
+        if board_id != seed.board_id:
+            return board_id
+    return ""
+
+
+def _collect_cross_inflow_logs(
+    *,
+    seed,
+    round_idx: int,
+    status: str,
+    total_reports: int,
+    moderation_action: str,
+    to_board_id: str,
+    selected_thread_candidate_id: str,
+    template_id: str,
+    flow_id: str,
+    action_logs: list[dict],
+) -> list[dict]:
+    if not to_board_id:
+        return []
+
+    recent_actions = [
+        str(row.get("action_type", "")).strip()
+        for row in action_logs
+        if int(row.get("round", 0) or 0) == round_idx and isinstance(row, dict)
+    ]
+    round_post_volume = sum(1 for action in recent_actions if action == "POST_COMMENT")
+
+    triggered_by_moderation = moderation_action in _MODERATION_ACTION_TYPES
+    triggered_by_pressure = (
+        total_reports >= 6
+        or status in {"hidden", "locked", "ghost", "sanctioned"}
+        # Even without formal moderation, sustained round traffic can trigger summary relays.
+        or (round_idx >= 2 and round_post_volume >= 3)
+    )
+    if not (triggered_by_moderation or triggered_by_pressure):
+        return []
+
+    reason = "moderation" if triggered_by_moderation else "report_pressure"
+    mode = "repost" if triggered_by_moderation else "summary_relay"
+    return [
+        {
+            "round": round_idx,
+            "from_board_id": seed.board_id,
+            "to_board_id": to_board_id,
+            "mode": mode,
+            "reason": reason,
+            "status": status,
+            "total_reports": total_reports,
+            "thread_candidate_id": selected_thread_candidate_id,
+            "thread_template_id": template_id,
+            "comment_flow_id": flow_id,
+            "summary_hint": f"R{round_idx} round summary relay",
+            "linked_actions": recent_actions[:6],
+        }
+    ]
 
 
 def _round_node_generate_comment(
@@ -905,6 +969,7 @@ def extract_stage_payloads(sim_result: dict) -> SimulationStagePayloads:
             "rounds": list(sim_result.get("rounds", [])),
             "gate_logs": list(sim_result.get("gate_logs", [])),
             "action_logs": list(sim_result.get("action_logs", [])),
+            "cross_inflow_logs": list(sim_result.get("cross_inflow_logs", [])),
             "persona_memory": persona_memory_copy,
         },
         "moderation": {
@@ -933,6 +998,7 @@ def assemble_sim_result_from_stage_payloads(stage_payloads: SimulationStagePaylo
         "rounds": list(round_payload.get("rounds", [])),
         "gate_logs": list(round_payload.get("gate_logs", [])),
         "action_logs": list(round_payload.get("action_logs", [])),
+        "cross_inflow_logs": list(round_payload.get("cross_inflow_logs", [])),
         "persona_memory": dict(round_payload.get("persona_memory", {})),
         "thread_state": end_payload.get("thread_state"),
     }
@@ -948,6 +1014,7 @@ def run_simulation(
     round_logs: list[dict] = []
     gate_logs: list[dict] = []
     action_logs: list[dict] = []
+    cross_inflow_logs: list[dict] = []
     moderation_decisions: list[dict] = []
     persona_memory: dict[str, list[str]] = {}
     community_id = _select_community_id(seed, packs)
@@ -956,6 +1023,7 @@ def run_simulation(
     meme_seed_id = _select_meme_seed_id(seed, packs)
     template_context = _resolve_template_context(packs, template_id)
     flow_context = _resolve_flow_context(packs, flow_id)
+    cross_inflow_target_board = _select_cross_inflow_target_board(seed, template_context)
     thread_candidates = _build_thread_candidates(
         seed,
         community_id=community_id,
@@ -1132,6 +1200,19 @@ def run_simulation(
             evidence_hours_left=evidence_hours_left,
         )
         action_logs.extend(dispute_hook_events)
+        cross_inflow_events = _collect_cross_inflow_logs(
+            seed=seed,
+            round_idx=round_idx,
+            status=status,
+            total_reports=total_reports,
+            moderation_action=round_action,
+            to_board_id=cross_inflow_target_board,
+            selected_thread_candidate_id=str(selected_thread.get("candidate_id", "TC-0")),
+            template_id=template_id,
+            flow_id=flow_id,
+            action_logs=action_logs,
+        )
+        cross_inflow_logs.extend(cross_inflow_events)
 
         moderation_decisions.append(
             {
@@ -1189,6 +1270,7 @@ def run_simulation(
             "rounds": round_logs,
             "gate_logs": gate_logs,
             "action_logs": action_logs,
+            "cross_inflow_logs": cross_inflow_logs,
             "persona_memory": persona_memory,
         },
         "moderation": {

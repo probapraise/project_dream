@@ -368,3 +368,26 @@ def test_simulation_emits_dispute_hooks_when_moderation_and_evidence_risk_overla
     assert "APPEAL_TIMER_TICK" in action_types
     assert "APPEAL_DELAY" in action_types
     assert "CONSPIRACY_BACKLASH" in action_types
+
+
+def test_simulation_emits_cross_inflow_stage_logs():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    seed = SeedInput(
+        seed_id="SEED-CROSS-001",
+        title="교차 유입 스테이지 테스트",
+        summary="운영 개입 이후 타 보드 요약 전달 로그가 남아야 한다",
+        board_id="B07",
+        zone_id="D",
+    )
+
+    result = run_simulation(seed=seed, rounds=5, corpus=["샘플"], max_retries=0, packs=packs)
+
+    assert "cross_inflow_logs" in result
+    cross_logs = result["cross_inflow_logs"]
+    assert cross_logs
+
+    first = cross_logs[0]
+    assert first["from_board_id"] == "B07"
+    assert first["to_board_id"] != "B07"
+    assert first["mode"] in {"repost", "summary_relay"}
+    assert first["reason"] in {"moderation", "report_pressure"}

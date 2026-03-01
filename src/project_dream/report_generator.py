@@ -241,6 +241,10 @@ def _build_story_checklist(seed, sim_result: dict, evidence_watch: dict) -> dict
     rounds = [row for row in rounds_raw if isinstance(row, dict)] if isinstance(rounds_raw, list) else []
     action_logs_raw = sim_result.get("action_logs", [])
     action_logs = [row for row in action_logs_raw if isinstance(row, dict)] if isinstance(action_logs_raw, list) else []
+    cross_inflow_raw = sim_result.get("cross_inflow_logs", [])
+    cross_inflow_logs = (
+        [row for row in cross_inflow_raw if isinstance(row, dict)] if isinstance(cross_inflow_raw, list) else []
+    )
     thread_state = sim_result.get("thread_state", {})
     if not isinstance(thread_state, dict):
         thread_state = {}
@@ -252,6 +256,13 @@ def _build_story_checklist(seed, sim_result: dict, evidence_watch: dict) -> dict
     }
     if str(thread_state.get("board_id", "")).strip():
         board_ids.add(str(thread_state.get("board_id", "")).strip())
+    for row in cross_inflow_logs:
+        from_board = str(row.get("from_board_id", "")).strip()
+        to_board = str(row.get("to_board_id", "")).strip()
+        if from_board:
+            board_ids.add(from_board)
+        if to_board:
+            board_ids.add(to_board)
 
     community_ids = {
         str(row.get("community_id", "")).strip()
@@ -272,7 +283,13 @@ def _build_story_checklist(seed, sim_result: dict, evidence_watch: dict) -> dict
         1 for row in action_logs if str(row.get("action_type", "")).strip() in {"LOCK_THREAD", "GHOST_THREAD"}
     )
     countdown_risk = bool(evidence_watch.get("countdown_risk")) or lock_actions > 0
-    board_migration_observed = len(board_ids) >= 2
+    board_migration_from_cross_inflow = any(
+        str(row.get("from_board_id", "")).strip()
+        and str(row.get("to_board_id", "")).strip()
+        and str(row.get("from_board_id", "")).strip() != str(row.get("to_board_id", "")).strip()
+        for row in cross_inflow_logs
+    )
+    board_migration_observed = len(board_ids) >= 2 or board_migration_from_cross_inflow
 
     first_round = rounds[0] if rounds else {}
     event_card_id = (
@@ -307,7 +324,7 @@ def _build_story_checklist(seed, sim_result: dict, evidence_watch: dict) -> dict
             "details": (
                 f"board_ids={sorted(board_ids)};"
                 f"community_ids={sorted(community_ids)};"
-                f"cross_inflow={board_migration_observed}"
+                f"cross_inflow={board_migration_from_cross_inflow}"
             ),
         },
         "meme": {

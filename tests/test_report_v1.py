@@ -150,3 +150,21 @@ def test_report_v1_includes_moderation_backlash_highlight_when_moderation_occurs
 
     assert any(item.get("tag") == "moderation_backlash" for item in report["highlights_top10"])
     assert any("운영개입" in str(item.get("text", "")) for item in report["highlights_top10"])
+
+
+def test_report_v1_story_checklist_marks_board_migration_from_cross_inflow():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    seed = SeedInput(
+        seed_id="SEED-RPT-CROSS-001",
+        title="교차 유입 체크리스트",
+        summary="퍼나르기 발생 시 보드 이동 단서가 risk여야 한다",
+        board_id="B07",
+        zone_id="D",
+    )
+    sim_result = run_simulation(seed=seed, rounds=5, corpus=["샘플"], max_retries=0, packs=packs)
+
+    report = build_report_v1(seed, sim_result, packs)
+
+    clue = report["story_checklist"]["board_migration_clue"]
+    assert clue["status"] == "risk"
+    assert "cross_inflow=True" in clue["details"]
