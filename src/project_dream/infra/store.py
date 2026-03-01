@@ -137,6 +137,7 @@ class RunRepository(Protocol):
         seed_id: str | None = None,
         board_id: str | None = None,
         status: str | None = None,
+        pack_fingerprint: str | None = None,
     ) -> dict:
         ...
 
@@ -216,6 +217,7 @@ class FileRunRepository:
         status = ""
         termination_reason = ""
         total_reports = 0
+        pack_fingerprint = ""
         runlog_rows: list[dict] = []
 
         if runlog_path.exists():
@@ -233,6 +235,8 @@ class FileRunRepository:
                             board_id = str(bundle.get("board_id", ""))
                         if not zone_id:
                             zone_id = str(bundle.get("zone_id", ""))
+                    if not pack_fingerprint:
+                        pack_fingerprint = str(row.get("pack_fingerprint", "")).strip()
                 elif row_type == "round":
                     if not board_id:
                         board_id = str(row.get("board_id", ""))
@@ -268,6 +272,7 @@ class FileRunRepository:
             "status": status,
             "termination_reason": termination_reason,
             "total_reports": total_reports,
+            "pack_fingerprint": pack_fingerprint,
             "stage_retry_count": stage_trace["stage_retry_count"],
             "stage_failure_count": stage_trace["stage_failure_count"],
             "max_stage_attempts": stage_trace["max_stage_attempts"],
@@ -283,6 +288,7 @@ class FileRunRepository:
         seed_id: str | None = None,
         board_id: str | None = None,
         status: str | None = None,
+        pack_fingerprint: str | None = None,
     ) -> dict:
         self._validate_list_params(limit=limit, offset=offset)
 
@@ -293,6 +299,8 @@ class FileRunRepository:
             rows = [row for row in rows if row.get("board_id", "") == board_id]
         if status:
             rows = [row for row in rows if row.get("status", "") == status]
+        if pack_fingerprint:
+            rows = [row for row in rows if row.get("pack_fingerprint", "") == pack_fingerprint]
 
         total = len(rows)
         items = rows[offset : offset + limit]
@@ -431,6 +439,7 @@ class SQLiteRunRepository:
                     status TEXT,
                     termination_reason TEXT,
                     total_reports INTEGER DEFAULT 0,
+                    pack_fingerprint TEXT DEFAULT '',
                     stage_retry_count INTEGER DEFAULT 0,
                     stage_failure_count INTEGER DEFAULT 0,
                     max_stage_attempts INTEGER DEFAULT 0,
@@ -472,6 +481,8 @@ class SQLiteRunRepository:
                 conn.execute("ALTER TABLE runs ADD COLUMN stage_failure_count INTEGER DEFAULT 0")
             if "max_stage_attempts" not in columns:
                 conn.execute("ALTER TABLE runs ADD COLUMN max_stage_attempts INTEGER DEFAULT 0")
+            if "pack_fingerprint" not in columns:
+                conn.execute("ALTER TABLE runs ADD COLUMN pack_fingerprint TEXT DEFAULT ''")
             conn.commit()
 
     def _upsert_run_index(self, run_dir: Path, sim_result: dict, report: dict) -> None:
@@ -483,6 +494,7 @@ class SQLiteRunRepository:
             if isinstance(graph_node_trace, dict)
             else {"stage_retry_count": 0, "stage_failure_count": 0, "max_stage_attempts": 0}
         )
+        pack_fingerprint = str(sim_result.get("pack_fingerprint", "")).strip()
         created_at_utc = datetime.now(UTC).isoformat()
 
         with self._connect() as conn:
@@ -490,10 +502,10 @@ class SQLiteRunRepository:
                 """
                 INSERT INTO runs (
                     run_id, run_dir, created_at_utc, seed_id, board_id, zone_id, status,
-                    termination_reason, total_reports, stage_retry_count, stage_failure_count,
+                    termination_reason, total_reports, pack_fingerprint, stage_retry_count, stage_failure_count,
                     max_stage_attempts, report_gate_pass, eval_pass
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(run_id) DO UPDATE SET
                     run_dir=excluded.run_dir,
                     created_at_utc=excluded.created_at_utc,
@@ -503,6 +515,7 @@ class SQLiteRunRepository:
                     status=excluded.status,
                     termination_reason=excluded.termination_reason,
                     total_reports=excluded.total_reports,
+                    pack_fingerprint=excluded.pack_fingerprint,
                     stage_retry_count=excluded.stage_retry_count,
                     stage_failure_count=excluded.stage_failure_count,
                     max_stage_attempts=excluded.max_stage_attempts,
@@ -518,6 +531,7 @@ class SQLiteRunRepository:
                     str(thread_state.get("status", "")),
                     str(thread_state.get("termination_reason", "")),
                     int(thread_state.get("total_reports", 0)),
+                    pack_fingerprint,
                     int(stage_trace["stage_retry_count"]),
                     int(stage_trace["stage_failure_count"]),
                     int(stage_trace["max_stage_attempts"]),
@@ -592,6 +606,7 @@ class SQLiteRunRepository:
         seed_id: str | None = None,
         board_id: str | None = None,
         status: str | None = None,
+        pack_fingerprint: str | None = None,
     ) -> dict:
         if limit < 1:
             raise ValueError(f"Invalid limit: {limit}")
@@ -609,6 +624,9 @@ class SQLiteRunRepository:
         if status:
             clauses.append("status = ?")
             params.append(status)
+        if pack_fingerprint:
+            clauses.append("pack_fingerprint = ?")
+            params.append(pack_fingerprint)
         where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
 
         with self._connect() as conn:
@@ -621,7 +639,7 @@ class SQLiteRunRepository:
             rows = conn.execute(
                 f"""
                 SELECT run_id, run_dir, created_at_utc, seed_id, board_id, zone_id, status,
-                       termination_reason, total_reports, stage_retry_count, stage_failure_count,
+                       termination_reason, total_reports, pack_fingerprint, stage_retry_count, stage_failure_count,
                        max_stage_attempts, report_gate_pass, eval_pass
                 FROM runs
                 {where_clause}
@@ -646,6 +664,7 @@ class SQLiteRunRepository:
                     "status": str(row["status"] or ""),
                     "termination_reason": str(row["termination_reason"] or ""),
                     "total_reports": int(row["total_reports"] or 0),
+                    "pack_fingerprint": str(row["pack_fingerprint"] or ""),
                     "stage_retry_count": int(row["stage_retry_count"] or 0),
                     "stage_failure_count": int(row["stage_failure_count"] or 0),
                     "max_stage_attempts": int(row["max_stage_attempts"] or 0),

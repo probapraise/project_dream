@@ -207,6 +207,15 @@ def test_web_api_list_runs_with_filters_and_pagination(tmp_path: Path):
     assert filtered_seed["count"] == 1
     assert filtered_seed["items"][0]["run_id"] == run_first
 
+    selected_fp = next(
+        (row.get("pack_fingerprint", "") for row in listed["items"] if row.get("run_id") == run_first),
+        "",
+    )
+    assert selected_fp
+    filtered_pack = api.list_runs(pack_fingerprint=selected_fp)
+    assert filtered_pack["count"] >= 1
+    assert any(row["run_id"] == run_first for row in filtered_pack["items"])
+
     paged = api.list_runs(limit=1, offset=1)
     assert paged["count"] == 1
     assert paged["total"] == 2

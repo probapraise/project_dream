@@ -106,6 +106,7 @@ class ProjectDreamAPI:
         seed_id: str | None = None,
         board_id: str | None = None,
         status: str | None = None,
+        pack_fingerprint: str | None = None,
     ) -> dict:
         return self.repository.list_runs(
             limit=limit,
@@ -113,6 +114,7 @@ class ProjectDreamAPI:
             seed_id=seed_id,
             board_id=board_id,
             status=status,
+            pack_fingerprint=pack_fingerprint,
         )
 
     def get_report(self, run_id: str) -> dict:

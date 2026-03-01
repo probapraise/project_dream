@@ -241,6 +241,8 @@ def test_file_run_repository_lists_runs_with_filters_and_pagination(tmp_path: Pa
     sim_first = _sample_sim_result()
     sim_first["rounds"][0]["board_id"] = "B07"
     sim_first["end_condition"]["status"] = "visible"
+    sim_first["context_bundle"] = {"board_id": "B07", "zone_id": "D"}
+    sim_first["pack_fingerprint"] = "pack-fp-file-1"
     report_first = _sample_report()
     report_first["seed_id"] = "SEED-FILE-LIST-1"
     report_first["report_gate"] = {"pass_fail": True}
@@ -248,6 +250,8 @@ def test_file_run_repository_lists_runs_with_filters_and_pagination(tmp_path: Pa
     sim_second = _sample_sim_result()
     sim_second["rounds"][0]["board_id"] = "B08"
     sim_second["end_condition"]["status"] = "locked"
+    sim_second["context_bundle"] = {"board_id": "B08", "zone_id": "D"}
+    sim_second["pack_fingerprint"] = "pack-fp-file-2"
     report_second = _sample_report()
     report_second["seed_id"] = "SEED-FILE-LIST-2"
     report_second["report_gate"] = {"pass_fail": False}
@@ -266,6 +270,8 @@ def test_file_run_repository_lists_runs_with_filters_and_pagination(tmp_path: Pa
     assert by_id[run_first.name]["stage_retry_count"] == 1
     assert by_id[run_first.name]["stage_failure_count"] == 0
     assert by_id[run_first.name]["max_stage_attempts"] == 2
+    assert by_id[run_first.name]["pack_fingerprint"] == "pack-fp-file-1"
+    assert by_id[run_second.name]["pack_fingerprint"] == "pack-fp-file-2"
 
     filtered_seed = repo.list_runs(seed_id="SEED-FILE-LIST-1")
     assert filtered_seed["count"] == 1
@@ -278,6 +284,10 @@ def test_file_run_repository_lists_runs_with_filters_and_pagination(tmp_path: Pa
     filtered_status = repo.list_runs(status="locked")
     assert filtered_status["count"] == 1
     assert filtered_status["items"][0]["run_id"] == run_second.name
+
+    filtered_pack = repo.list_runs(pack_fingerprint="pack-fp-file-1")
+    assert filtered_pack["count"] == 1
+    assert filtered_pack["items"][0]["run_id"] == run_first.name
 
     paged = repo.list_runs(limit=1, offset=1)
     assert paged["count"] == 1

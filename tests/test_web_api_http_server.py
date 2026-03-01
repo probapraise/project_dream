@@ -213,6 +213,24 @@ def test_http_server_health_simulate_evaluate(tmp_path: Path):
         assert runs_filtered["count"] >= 1
         assert any(row["run_id"] == sim["run_id"] for row in runs_filtered["items"])
 
+        sim_pack_fingerprint = next(
+            (
+                row.get("pack_fingerprint", "")
+                for row in runs_list["items"]
+                if row.get("run_id") == sim["run_id"]
+            ),
+            "",
+        )
+        assert sim_pack_fingerprint
+        status, runs_filtered_pack = _request_json(
+            "GET",
+            f"{base}/runs?pack_fingerprint={sim_pack_fingerprint}",
+            headers=auth,
+        )
+        assert status == 200
+        assert runs_filtered_pack["count"] >= 1
+        assert any(row["run_id"] == sim["run_id"] for row in runs_filtered_pack["items"])
+
         status, runs_paged = _request_json("GET", f"{base}/runs?limit=1&offset=0", headers=auth)
         assert status == 200
         assert runs_paged["count"] == 1

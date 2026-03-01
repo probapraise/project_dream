@@ -96,6 +96,7 @@ def create_server(
                     seed_id = query.get("seed_id", [None])[0] or None
                     board_id = query.get("board_id", [None])[0] or None
                     status_filter = query.get("status", [None])[0] or None
+                    pack_fingerprint = query.get("pack_fingerprint", [None])[0] or None
                     self._send(
                         200,
                         api.list_runs(
@@ -104,6 +105,7 @@ def create_server(
                             seed_id=seed_id,
                             board_id=board_id,
                             status=status_filter,
+                            pack_fingerprint=pack_fingerprint,
                         ),
                     )
                     return
