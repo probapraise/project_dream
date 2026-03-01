@@ -11,6 +11,7 @@ from project_dream.pack_schemas import (
     PersonaPackPayload,
     RulePackPayload,
     TemplatePackPayload,
+    WorldPackPayload,
     validate_pack_payload,
 )
 
@@ -30,6 +31,7 @@ class LoadedPacks:
     comment_flows: dict[str, dict]
     event_cards: dict[str, dict]
     meme_seeds: dict[str, dict]
+    world_schema: dict
     gate_policy: dict
     pack_manifest: dict
     pack_fingerprint: str
@@ -49,6 +51,7 @@ _PACK_FILE_NAMES = (
     "entity_pack.json",
     "persona_pack.json",
     "template_pack.json",
+    "world_pack.json",
 )
 _ALLOWED_DIAL_AXES = {"U", "E", "M", "S", "H"}
 _ALLOWED_STATUS_VALUES = {"visible", "hidden", "locked", "ghost", "sanctioned"}
@@ -380,6 +383,11 @@ def load_packs(base_dir: Path, enforce_phase1_minimums: bool = False) -> LoadedP
         TemplatePackPayload,
         "template_pack.json",
     )
+    world_pack = validate_pack_payload(
+        _read_pack(base_dir / "world_pack.json", "entities"),
+        WorldPackPayload,
+        "world_pack.json",
+    )
 
     boards = _index_by_id(board_pack["boards"], "board")
     communities = _index_by_id(community_pack["communities"], "community")
@@ -402,6 +410,19 @@ def load_packs(base_dir: Path, enforce_phase1_minimums: bool = False) -> LoadedP
     raw_comment_flows = _index_by_id(template_pack.get("comment_flows", []), "comment_flow")
     event_cards = _index_by_id(template_pack.get("event_cards", []), "event_card")
     meme_seeds = _index_by_id(template_pack.get("meme_seeds", []), "meme_seed")
+    world_entities = _index_by_id(world_pack.get("entities", []), "world_entity")
+    world_relations = [
+        dict(row) for row in world_pack.get("relations", []) if isinstance(row, dict)
+    ]
+    world_timeline_events = [
+        dict(row) for row in world_pack.get("timeline_events", []) if isinstance(row, dict)
+    ]
+    world_rules = [
+        dict(row) for row in world_pack.get("world_rules", []) if isinstance(row, dict)
+    ]
+    world_glossary = [
+        dict(row) for row in world_pack.get("glossary", []) if isinstance(row, dict)
+    ]
     thread_templates = {
         template_id: _normalize_thread_template(template, boards=boards)
         for template_id, template in raw_thread_templates.items()
@@ -479,6 +500,53 @@ def load_packs(base_dir: Path, enforce_phase1_minimums: bool = False) -> LoadedP
             if board_id not in boards:
                 raise ValueError(f"Unknown intended board_id in meme_seed {meme['id']}: {board_id}")
 
+    for entity in world_entities.values():
+        linked_org_id = str(entity.get("linked_org_id", "")).strip()
+        if linked_org_id and linked_org_id not in orgs:
+            raise ValueError(f"Unknown linked_org_id in world entity {entity['id']}: {linked_org_id}")
+        linked_char_id = str(entity.get("linked_char_id", "")).strip()
+        if linked_char_id and linked_char_id not in chars:
+            raise ValueError(f"Unknown linked_char_id in world entity {entity['id']}: {linked_char_id}")
+        linked_board_id = str(entity.get("linked_board_id", "")).strip()
+        if linked_board_id and linked_board_id not in boards:
+            raise ValueError(f"Unknown linked_board_id in world entity {entity['id']}: {linked_board_id}")
+
+    for relation in world_relations:
+        relation_id = str(relation.get("id", "")).strip() or "(unknown)"
+        from_entity_id = str(relation.get("from_entity_id", "")).strip()
+        to_entity_id = str(relation.get("to_entity_id", "")).strip()
+        if from_entity_id not in world_entities:
+            raise ValueError(f"Unknown from_entity_id in world relation {relation_id}: {from_entity_id}")
+        if to_entity_id not in world_entities:
+            raise ValueError(f"Unknown to_entity_id in world relation {relation_id}: {to_entity_id}")
+
+    for event in world_timeline_events:
+        event_id = str(event.get("id", "")).strip() or "(unknown)"
+        for entity_id in _as_str_list(event.get("entity_ids")):
+            if entity_id not in world_entities:
+                raise ValueError(f"Unknown entity_id in world timeline event {event_id}: {entity_id}")
+        location_entity_id = str(event.get("location_entity_id", "")).strip()
+        if location_entity_id and location_entity_id not in world_entities:
+            raise ValueError(
+                f"Unknown location_entity_id in world timeline event {event_id}: {location_entity_id}"
+            )
+
+    for world_rule in world_rules:
+        rule_id = str(world_rule.get("id", "")).strip() or "(unknown)"
+        for entity_id in _as_str_list(world_rule.get("scope_entity_ids")):
+            if entity_id not in world_entities:
+                raise ValueError(f"Unknown scope_entity_id in world rule {rule_id}: {entity_id}")
+
+    world_schema = {
+        "schema_version": str(world_pack.get("schema_version", "world_schema.v1")),
+        "version": str(world_pack.get("version", "1.0.0")),
+        "entities": list(world_entities.values()),
+        "relations": world_relations,
+        "timeline_events": world_timeline_events,
+        "world_rules": world_rules,
+        "glossary": world_glossary,
+    }
+
     packs = LoadedPacks(
         boards=boards,
         communities=communities,
@@ -493,6 +561,7 @@ def load_packs(base_dir: Path, enforce_phase1_minimums: bool = False) -> LoadedP
         comment_flows=comment_flows,
         event_cards=event_cards,
         meme_seeds=meme_seeds,
+        world_schema=world_schema,
         gate_policy=gate_policy,
         pack_manifest=pack_manifest,
         pack_fingerprint=pack_fingerprint,

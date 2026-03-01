@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TypeVar
+from typing import Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError
 
@@ -238,6 +238,69 @@ class TemplatePackPayload(_StrictModel):
     comment_flows: list[CommentFlowRow] = Field(default_factory=list)
     event_cards: list[EventCardRow] = Field(default_factory=list)
     meme_seeds: list[MemeSeedRow] = Field(default_factory=list)
+
+
+WorldEvidenceGrade = Literal["A", "B", "C"]
+
+
+class _WorldCanonicalMeta(_StrictModel):
+    source: StrictStr
+    valid_from: StrictStr
+    valid_to: StrictStr = ""
+    evidence_grade: WorldEvidenceGrade = "C"
+
+
+class WorldEntityRow(_WorldCanonicalMeta):
+    id: StrictStr
+    entity_type: StrictStr
+    name: StrictStr
+    summary: StrictStr = ""
+    tags: list[StrictStr] = Field(default_factory=list)
+    linked_org_id: StrictStr = ""
+    linked_char_id: StrictStr = ""
+    linked_board_id: StrictStr = ""
+
+
+class WorldRelationRow(_WorldCanonicalMeta):
+    id: StrictStr
+    relation_type: StrictStr
+    from_entity_id: StrictStr
+    to_entity_id: StrictStr
+    notes: StrictStr = ""
+
+
+class WorldTimelineEventRow(_WorldCanonicalMeta):
+    id: StrictStr
+    title: StrictStr
+    summary: StrictStr = ""
+    era: StrictStr = ""
+    entity_ids: list[StrictStr] = Field(default_factory=list)
+    location_entity_id: StrictStr = ""
+
+
+class WorldRuleRow(_WorldCanonicalMeta):
+    id: StrictStr
+    name: StrictStr
+    category: StrictStr = ""
+    description: StrictStr = ""
+    scope_entity_ids: list[StrictStr] = Field(default_factory=list)
+
+
+class WorldGlossaryRow(_WorldCanonicalMeta):
+    id: StrictStr
+    term: StrictStr
+    definition: StrictStr
+    aliases: list[StrictStr] = Field(default_factory=list)
+
+
+class WorldPackPayload(_StrictModel):
+    schema_version: StrictStr = "world_schema.v1"
+    version: StrictStr = "1.0.0"
+    entities: list[WorldEntityRow] = Field(default_factory=list)
+    relations: list[WorldRelationRow] = Field(default_factory=list)
+    timeline_events: list[WorldTimelineEventRow] = Field(default_factory=list)
+    world_rules: list[WorldRuleRow] = Field(default_factory=list)
+    glossary: list[WorldGlossaryRow] = Field(default_factory=list)
 
 
 _ModelT = TypeVar("_ModelT", bound=BaseModel)

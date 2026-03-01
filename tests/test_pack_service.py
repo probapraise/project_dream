@@ -76,3 +76,27 @@ def test_pack_service_loads_register_profiles_and_switch_rules():
     assert "REG-AMPLIFY" in packs.register_profiles
     assert isinstance(packs.register_switch_rules, list)
     assert any(rule.get("id") == "RR-HYPE-AMPLIFY" for rule in packs.register_switch_rules)
+
+
+def test_pack_service_loads_world_schema_v1_contract():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+
+    assert isinstance(packs.world_schema, dict)
+    assert packs.world_schema.get("schema_version") == "world_schema.v1"
+    assert packs.world_schema.get("version") == "1.0.0"
+    assert isinstance(packs.world_schema.get("entities"), list)
+    assert packs.world_schema["entities"]
+    assert isinstance(packs.world_schema.get("relations"), list)
+    assert packs.world_schema["relations"]
+    assert isinstance(packs.world_schema.get("timeline_events"), list)
+    assert packs.world_schema["timeline_events"]
+    assert isinstance(packs.world_schema.get("world_rules"), list)
+    assert packs.world_schema["world_rules"]
+    assert isinstance(packs.world_schema.get("glossary"), list)
+    assert packs.world_schema["glossary"]
+
+    first_entity = packs.world_schema["entities"][0]
+    assert "source" in first_entity
+    assert "valid_from" in first_entity
+    assert "valid_to" in first_entity
+    assert first_entity.get("evidence_grade") in {"A", "B", "C"}

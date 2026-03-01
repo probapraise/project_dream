@@ -1,0 +1,183 @@
+{
+  "schema_version": "world_schema.v1",
+  "version": "1.0.0",
+  "entities": [
+    {
+      "id": "WE-FACTION-ACADEMY",
+      "entity_type": "faction",
+      "name": "아카데미 본원",
+      "summary": "학칙과 재판권을 보유한 중앙 권력",
+      "tags": ["institution", "judicial", "education"],
+      "linked_org_id": "ORG-ACA-001",
+      "linked_char_id": "",
+      "linked_board_id": "B11",
+      "source": "canon.codex.vol1",
+      "valid_from": "Y0",
+      "valid_to": "",
+      "evidence_grade": "A"
+    },
+    {
+      "id": "WE-FACTION-MERCHANT",
+      "entity_type": "faction",
+      "name": "상단 연합",
+      "summary": "물류·후원·예치금을 장악한 거래 권력",
+      "tags": ["market", "contract", "sponsor"],
+      "linked_org_id": "ORG-MKT-001",
+      "linked_char_id": "",
+      "linked_board_id": "B07",
+      "source": "canon.market.ledger",
+      "valid_from": "Y12",
+      "valid_to": "",
+      "evidence_grade": "A"
+    },
+    {
+      "id": "WE-LOCATION-ARCHIVE",
+      "entity_type": "location",
+      "name": "봉인 서고",
+      "summary": "열람권이 있어야 접근 가능한 고등 기록 보관 구역",
+      "tags": ["archive", "restricted", "lore"],
+      "linked_org_id": "",
+      "linked_char_id": "",
+      "linked_board_id": "B08",
+      "source": "canon.archive.map",
+      "valid_from": "Y3",
+      "valid_to": "",
+      "evidence_grade": "B"
+    },
+    {
+      "id": "WE-ARTIFACT-SIGNET",
+      "entity_type": "artifact",
+      "name": "삭제 인장",
+      "summary": "삭제 이력과 봉문 이력을 남기는 감찰 장치",
+      "tags": ["audit", "moderation", "trace"],
+      "linked_org_id": "ORG-INS-001",
+      "linked_char_id": "",
+      "linked_board_id": "B17",
+      "source": "canon.audit.protocol",
+      "valid_from": "Y24",
+      "valid_to": "",
+      "evidence_grade": "A"
+    },
+    {
+      "id": "WE-PERSONA-SPOKES",
+      "entity_type": "person",
+      "name": "공보국장",
+      "summary": "운영 공지와 공식 해명을 담당하는 얼굴",
+      "tags": ["official", "spokesperson"],
+      "linked_org_id": "ORG-PR-001",
+      "linked_char_id": "CHAR-PR-001",
+      "linked_board_id": "B10",
+      "source": "canon.directory.y172",
+      "valid_from": "Y168",
+      "valid_to": "",
+      "evidence_grade": "A"
+    }
+  ],
+  "relations": [
+    {
+      "id": "WR-001",
+      "relation_type": "regulates",
+      "from_entity_id": "WE-FACTION-ACADEMY",
+      "to_entity_id": "WE-FACTION-MERCHANT",
+      "notes": "학칙 위반 거래에 대해 징계권 행사",
+      "source": "canon.codex.vol2",
+      "valid_from": "Y20",
+      "valid_to": "",
+      "evidence_grade": "B"
+    },
+    {
+      "id": "WR-002",
+      "relation_type": "stores",
+      "from_entity_id": "WE-LOCATION-ARCHIVE",
+      "to_entity_id": "WE-ARTIFACT-SIGNET",
+      "notes": "삭제 인장 원본 기록이 봉인 서고에 보관",
+      "source": "canon.archive.logbook",
+      "valid_from": "Y24",
+      "valid_to": "",
+      "evidence_grade": "A"
+    },
+    {
+      "id": "WR-003",
+      "relation_type": "represents",
+      "from_entity_id": "WE-PERSONA-SPOKES",
+      "to_entity_id": "WE-FACTION-ACADEMY",
+      "notes": "공식 성명 시 본원을 대리",
+      "source": "canon.directory.y172",
+      "valid_from": "Y168",
+      "valid_to": "",
+      "evidence_grade": "A"
+    }
+  ],
+  "timeline_events": [
+    {
+      "id": "WV-001",
+      "title": "서고 접근권 개편",
+      "summary": "봉인 서고 접근권이 학기 단위 심사제로 변경됨",
+      "era": "Y169-Q2",
+      "entity_ids": ["WE-FACTION-ACADEMY", "WE-LOCATION-ARCHIVE"],
+      "location_entity_id": "WE-LOCATION-ARCHIVE",
+      "source": "canon.bulletin.169-02",
+      "valid_from": "Y169-Q2",
+      "valid_to": "",
+      "evidence_grade": "A"
+    },
+    {
+      "id": "WV-002",
+      "title": "삭제 인장 감사령 시행",
+      "summary": "감찰단의 삭제 인장 사용 로그 의무 공개가 시작됨",
+      "era": "Y172-Q1",
+      "entity_ids": ["WE-ARTIFACT-SIGNET", "WE-FACTION-ACADEMY", "WE-PERSONA-SPOKES"],
+      "location_entity_id": "WE-FACTION-ACADEMY",
+      "source": "canon.audit.decree.172-01",
+      "valid_from": "Y172-Q1",
+      "valid_to": "",
+      "evidence_grade": "A"
+    }
+  ],
+  "world_rules": [
+    {
+      "id": "WWR-001",
+      "name": "증거 등급 우선 원칙",
+      "category": "judicial",
+      "description": "등급 A 증거는 동일 시점의 B/C 증거보다 우선한다",
+      "scope_entity_ids": ["WE-FACTION-ACADEMY", "WE-LOCATION-ARCHIVE"],
+      "source": "canon.codex.vol1",
+      "valid_from": "Y0",
+      "valid_to": "",
+      "evidence_grade": "A"
+    },
+    {
+      "id": "WWR-002",
+      "name": "예치금 분쟁 중재 규칙",
+      "category": "market",
+      "description": "예치금 분쟁은 상단 연합 중재 후 감찰단 검수로 확정한다",
+      "scope_entity_ids": ["WE-FACTION-MERCHANT"],
+      "source": "canon.market.charter",
+      "valid_from": "Y30",
+      "valid_to": "",
+      "evidence_grade": "B"
+    }
+  ],
+  "glossary": [
+    {
+      "id": "WG-001",
+      "term": "봉문",
+      "definition": "스레드의 신규 쓰기 기능을 제한하고 열람만 허용하는 조치",
+      "aliases": ["봉문처리", "락다운"],
+      "source": "canon.ops.manual",
+      "valid_from": "Y0",
+      "valid_to": "",
+      "evidence_grade": "A"
+    },
+    {
+      "id": "WG-002",
+      "term": "삭제 인장",
+      "definition": "삭제/유령 처리 시점과 사유를 추적 기록하는 감찰 장치",
+      "aliases": ["인장 로그"],
+      "source": "canon.audit.protocol",
+      "valid_from": "Y24",
+      "valid_to": "",
+      "evidence_grade": "A"
+    }
+  ]
+}

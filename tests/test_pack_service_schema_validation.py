@@ -145,6 +145,7 @@ def test_load_packs_rejects_manifest_checksum_mismatch(tmp_path: Path):
             "entity_pack.json": "deadbeef",
             "persona_pack.json": "deadbeef",
             "template_pack.json": "deadbeef",
+            "world_pack.json": "deadbeef",
         },
     }
     _write_json(manifest_path, manifest_payload)
@@ -184,3 +185,29 @@ def test_load_packs_rejects_unknown_register_profile_reference(tmp_path: Path):
         load_packs(packs_dir)
 
     assert "Unknown register_profile_id" in str(exc.value)
+
+
+def test_load_packs_rejects_invalid_world_schema_evidence_grade(tmp_path: Path):
+    packs_dir = _copy_packs(tmp_path)
+    world_path = packs_dir / "world_pack.json"
+    payload = _read_json(world_path)
+    payload["entities"][0]["evidence_grade"] = "Z"
+    _write_json(world_path, payload)
+
+    with pytest.raises(ValueError) as exc:
+        load_packs(packs_dir)
+
+    assert "evidence_grade" in str(exc.value)
+
+
+def test_load_packs_rejects_world_relation_with_unknown_entity_id(tmp_path: Path):
+    packs_dir = _copy_packs(tmp_path)
+    world_path = packs_dir / "world_pack.json"
+    payload = _read_json(world_path)
+    payload["relations"][0]["to_entity_id"] = "WE-NOT-FOUND"
+    _write_json(world_path, payload)
+
+    with pytest.raises(ValueError) as exc:
+        load_packs(packs_dir)
+
+    assert "Unknown to_entity_id in world relation" in str(exc.value)
