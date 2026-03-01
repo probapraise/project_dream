@@ -10,6 +10,13 @@ def find_latest_regression_summary(regressions_dir: Path) -> Path | None:
     return candidates[-1]
 
 
+def find_regress_live_diff(regressions_dir: Path) -> Path | None:
+    path = regressions_dir / "regress-live-diff.md"
+    if not path.exists():
+        return None
+    return path
+
+
 def render_summary_markdown(summary: dict) -> str:
     gates = summary.get("gates", {})
     totals = summary.get("totals", {})
@@ -17,6 +24,7 @@ def render_summary_markdown(summary: dict) -> str:
     status = "PASS" if pass_fail else "FAIL"
     metric_set = summary.get("metric_set", "unknown")
     summary_path = summary.get("summary_path", "")
+    regress_live_diff_path = summary.get("regress_live_diff_path", "")
 
     lines = [
         "## Regression Gate Summary",
@@ -59,6 +67,8 @@ def render_summary_markdown(summary: dict) -> str:
 
     if summary_path:
         lines.extend(["", f"- summary_path: `{summary_path}`"])
+    if regress_live_diff_path:
+        lines.append(f"- regress_live_diff_path: `{regress_live_diff_path}`")
     lines.append("")
     return "\n".join(lines)
 
@@ -81,11 +91,14 @@ def _load_json(path: Path) -> dict:
 
 def write_job_summary(regressions_dir: Path, output_file: Path) -> None:
     latest = find_latest_regression_summary(regressions_dir)
+    regress_live_diff = find_regress_live_diff(regressions_dir)
     if latest is None:
         content = render_missing_summary_markdown()
     else:
         summary = _load_json(latest)
         summary.setdefault("summary_path", str(latest))
+        if regress_live_diff is not None:
+            summary.setdefault("regress_live_diff_path", str(regress_live_diff))
         content = render_summary_markdown(summary)
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
