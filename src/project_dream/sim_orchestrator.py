@@ -1,4 +1,4 @@
-from project_dream.env_engine import apply_policy_transition, compute_score
+from project_dream.env_engine import apply_policy_transition, compute_culture_weight, compute_score
 from project_dream.gen_engine import generate_comment, pop_last_generation_trace, reset_last_generation_trace
 from project_dream.gate_pipeline import run_gates
 from project_dream.persona_service import render_voice, select_participants
@@ -225,6 +225,12 @@ def _select_community_id(seed, packs) -> str:
         if community.get("zone_id") == seed.zone_id:
             return community["id"]
     return candidates[0]["id"]
+
+
+def _resolve_board_emotion(seed, packs) -> str:
+    if packs and seed.board_id in packs.boards:
+        return str(packs.boards[seed.board_id].get("emotion", "")).strip()
+    return ""
 
 
 def _dial_profile(seed) -> dict[str, int]:
@@ -889,6 +895,8 @@ def _round_node_policy_transition(
     sort_tab: str,
     evidence_grade: str,
     evidence_hours_left: int,
+    board_emotion: str,
+    dial_dominant_axis: str,
 ) -> dict:
     next_total_reports = total_reports + report_delta
     next_total_views = total_views + 3
@@ -905,6 +913,8 @@ def _round_node_policy_transition(
         sort_tab=sort_tab,
         evidence_grade=evidence_grade,
         evidence_hours_left=evidence_hours_left,
+        board_emotion=board_emotion,
+        dial_dominant_axis=dial_dominant_axis,
     )
 
     severity = 0
@@ -940,6 +950,8 @@ def _round_node_emit_logs(
     round_idx: int,
     persona_id: str,
     board_id: str,
+    board_emotion: str,
+    culture_weight_multiplier: float,
     community_id: str,
     template_id: str,
     flow_id: str,
@@ -984,6 +996,8 @@ def _round_node_emit_logs(
         "round": round_idx,
         "persona_id": persona_id,
         "board_id": board_id,
+        "board_emotion": board_emotion,
+        "culture_weight_multiplier": culture_weight_multiplier,
         "community_id": community_id,
         "thread_template_id": template_id,
         "comment_flow_id": flow_id,
@@ -1157,9 +1171,14 @@ def run_simulation(
         flow_context.get("body_sections")
     )
     template_taboos = _as_str_list(template_context.get("taboos"))
+    board_emotion = _resolve_board_emotion(seed, packs)
     dial_dominant_axis = _dominant_dial_axis(seed)
     dial_target_flow_id = _target_flow_from_dial(seed)
     dial_target_sort_tab = _target_sort_tab_from_dial(seed)
+    culture_weight_multiplier = compute_culture_weight(
+        board_emotion=board_emotion,
+        dial_dominant_axis=dial_dominant_axis,
+    )
     meme_context = _resolve_meme_seed_context(packs, meme_seed_id)
     meme_decay_profile = _select_meme_decay_profile(
         dominant_axis=dial_dominant_axis,
@@ -1253,6 +1272,8 @@ def run_simulation(
                 sort_tab=sort_tab,
                 evidence_grade=evidence_grade,
                 evidence_hours_left=evidence_hours_left,
+                board_emotion=board_emotion,
+                dial_dominant_axis=dial_dominant_axis,
             )
             status = str(transitioned["status"])
             sanction_level = int(transitioned["sanction_level"])
@@ -1268,6 +1289,8 @@ def run_simulation(
                 round_idx=round_idx,
                 persona_id=persona_id,
                 board_id=seed.board_id,
+                board_emotion=board_emotion,
+                culture_weight_multiplier=culture_weight_multiplier,
                 community_id=community_id,
                 template_id=template_id,
                 flow_id=flow_id,
@@ -1377,6 +1400,8 @@ def run_simulation(
 
     thread_state = {
         "board_id": seed.board_id,
+        "board_emotion": board_emotion,
+        "culture_weight_multiplier": culture_weight_multiplier,
         "community_id": community_id,
         "thread_template_id": template_id,
         "comment_flow_id": flow_id,

@@ -44,6 +44,8 @@ def _write_quality_run(run_dir: Path) -> None:
             "dial_target_flow_id": "P2",
             "dial_target_sort_tab": "evidence_first",
             "dial_dominant_axis": "E",
+            "board_emotion": "정밀",
+            "culture_weight_multiplier": 1.05,
         },
         {
             "type": "round",
@@ -54,6 +56,8 @@ def _write_quality_run(run_dir: Path) -> None:
             "dial_target_flow_id": "P2",
             "dial_target_sort_tab": "evidence_first",
             "dial_dominant_axis": "E",
+            "board_emotion": "정밀",
+            "culture_weight_multiplier": 1.05,
         },
         {
             "type": "round",
@@ -64,6 +68,8 @@ def _write_quality_run(run_dir: Path) -> None:
             "dial_target_flow_id": "P2",
             "dial_target_sort_tab": "evidence_first",
             "dial_dominant_axis": "E",
+            "board_emotion": "정밀",
+            "culture_weight_multiplier": 1.05,
         },
         {"type": "gate", "round": 1, "gates": [{"gate_name": "safety", "passed": False}]},
         {"type": "gate", "round": 2, "gates": [{"gate_name": "lore", "passed": True}]},
@@ -136,11 +142,15 @@ def test_eval_quality_v2_metrics_include_v1_and_new_metrics(tmp_path: Path):
     assert "dialogue_speaker_diversity" in result["metrics"]
     assert "dial_flow_alignment_rate" in result["metrics"]
     assert "dial_sort_tab_alignment_rate" in result["metrics"]
+    assert "culture_dial_alignment_rate" in result["metrics"]
+    assert "culture_weight_avg" in result["metrics"]
     assert 0.0 <= result["metrics"]["lore_pass_rate"] <= 1.0
     assert 0.0 <= result["metrics"]["moderation_escalation_depth"] <= 1.0
     assert 0.0 <= result["metrics"]["dialogue_speaker_diversity"] <= 1.0
     assert result["metrics"]["dial_flow_alignment_rate"] == 1.0
     assert result["metrics"]["dial_sort_tab_alignment_rate"] == 1.0
+    assert 0.0 <= result["metrics"]["culture_dial_alignment_rate"] <= 1.0
+    assert result["metrics"]["culture_weight_avg"] >= 1.0
 
 
 def test_eval_quality_unknown_metric_set_raises(tmp_path: Path):

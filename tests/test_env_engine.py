@@ -34,3 +34,18 @@ def test_evidence_grade_and_countdown_affect_score():
         evidence_hours_left=6,
     )
     assert degraded < baseline
+
+
+def test_board_emotion_and_dial_interaction_affect_score():
+    common = {
+        "up": 6,
+        "comments": 3,
+        "views": 80,
+        "preserve": 2,
+        "reports": 1,
+        "trust": 2,
+        "board_emotion": "냉소",
+    }
+    score_h = compute_score(**common, dial_dominant_axis="H")
+    score_e = compute_score(**common, dial_dominant_axis="E")
+    assert score_h > score_e

@@ -123,6 +123,22 @@ def _quality_metrics_v2(runlog_rows: list[dict], report: dict) -> dict[str, floa
     dial_flow_alignment_rate = dial_flow_aligned / max(1, dial_flow_total)
     dial_sort_tab_alignment_rate = dial_sort_tab_aligned / max(1, dial_sort_tab_total)
 
+    culture_total = 0
+    culture_aligned = 0
+    culture_weight_sum = 0.0
+    for row in round_rows:
+        try:
+            weight = float(row.get("culture_weight_multiplier"))
+        except (TypeError, ValueError):
+            continue
+        if not str(row.get("board_emotion", "")).strip():
+            continue
+        culture_total += 1
+        culture_weight_sum += weight
+        culture_aligned += int(weight >= 1.0)
+    culture_dial_alignment_rate = culture_aligned / max(1, culture_total)
+    culture_weight_avg = culture_weight_sum / max(1, culture_total)
+
     metrics.update(
         {
             "lore_pass_rate": float(round(lore_pass_rate, 4)),
@@ -130,6 +146,8 @@ def _quality_metrics_v2(runlog_rows: list[dict], report: dict) -> dict[str, floa
             "dialogue_speaker_diversity": float(round(dialogue_speaker_diversity, 4)),
             "dial_flow_alignment_rate": float(round(dial_flow_alignment_rate, 4)),
             "dial_sort_tab_alignment_rate": float(round(dial_sort_tab_alignment_rate, 4)),
+            "culture_dial_alignment_rate": float(round(culture_dial_alignment_rate, 4)),
+            "culture_weight_avg": float(round(culture_weight_avg, 4)),
         }
     )
     return metrics

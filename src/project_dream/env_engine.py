@@ -37,6 +37,50 @@ _TAB_SCORE_MULTIPLIER = {
     "preserve_first": 1.02,
 }
 
+_CULTURE_PROFILE_BY_EMOTION = {
+    "군중심리": "social",
+    "실용": "order",
+    "정밀": "order",
+    "승부욕": "conflict",
+    "피로": "social",
+    "덕심": "social",
+    "불신": "conflict",
+    "갈증": "social",
+    "절차주의": "order",
+    "품위": "social",
+    "분노": "conflict",
+    "공포": "conflict",
+    "친근": "social",
+    "설렘": "social",
+    "냉소": "conflict",
+    "권력의식": "order",
+    "편집증": "conflict",
+}
+
+_CULTURE_MULTIPLIER_BY_PROFILE = {
+    "social": {
+        "U": 1.03,
+        "E": 0.99,
+        "M": 1.0,
+        "S": 0.98,
+        "H": 1.04,
+    },
+    "order": {
+        "U": 0.98,
+        "E": 1.05,
+        "M": 1.04,
+        "S": 1.03,
+        "H": 0.95,
+    },
+    "conflict": {
+        "U": 1.01,
+        "E": 0.96,
+        "M": 1.02,
+        "S": 1.03,
+        "H": 1.06,
+    },
+}
+
 _STATUS_FLOOR_LEVEL = {
     "visible": 0,
     "hidden": 2,
@@ -52,6 +96,19 @@ def _normalize_account_type(account_type: str) -> str:
 
 def _normalize_tab(tab: str) -> str:
     return tab if tab in _TAB_SCORE_MULTIPLIER else "weekly_hot"
+
+
+def _normalize_dial_axis(dial_dominant_axis: str) -> str:
+    axis = str(dial_dominant_axis).strip().upper()
+    return axis if axis in {"U", "E", "M", "S", "H"} else "U"
+
+
+def compute_culture_weight(board_emotion: str = "", dial_dominant_axis: str = "U") -> float:
+    profile = _CULTURE_PROFILE_BY_EMOTION.get(str(board_emotion).strip(), "")
+    if not profile:
+        return 1.0
+    axis = _normalize_dial_axis(dial_dominant_axis)
+    return float(_CULTURE_MULTIPLIER_BY_PROFILE.get(profile, {}).get(axis, 1.0))
 
 
 def _thresholds_for(account_type: str, verified: bool) -> dict[str, int]:
@@ -113,6 +170,8 @@ def compute_score(
     sort_tab: str = "weekly_hot",
     evidence_grade: str = "B",
     evidence_hours_left: int | None = None,
+    board_emotion: str = "",
+    dial_dominant_axis: str = "U",
 ) -> float:
     w1, w2, w3, w4, w5, w6 = 1.0, 1.3, 0.2, 3.0, 1.8, 1.1
     base = (up * w1) + (comments * w2) + (views * w3) + (preserve * w4) - (reports * w5) + (trust * w6)
@@ -129,7 +188,16 @@ def compute_score(
             countdown_multiplier = 0.9
         elif remaining <= 24:
             countdown_multiplier = 0.95
-    score = base * exposure * sanction_penalty * _TAB_SCORE_MULTIPLIER[tab] * grade_multiplier * countdown_multiplier
+    culture_multiplier = compute_culture_weight(board_emotion=board_emotion, dial_dominant_axis=dial_dominant_axis)
+    score = (
+        base
+        * exposure
+        * sanction_penalty
+        * _TAB_SCORE_MULTIPLIER[tab]
+        * grade_multiplier
+        * countdown_multiplier
+        * culture_multiplier
+    )
     return score + urgent
 
 
@@ -239,6 +307,8 @@ def _thread_score_for_tab(thread: dict, tab: str) -> float:
         account_type=str(thread.get("account_type", "public")),
         sanction_level=int(thread.get("sanction_level", 0)),
         sort_tab=safe_tab,
+        board_emotion=str(thread.get("board_emotion", "")),
+        dial_dominant_axis=str(thread.get("dial_dominant_axis", "U")),
     )
     evidence = float(thread.get("evidence", 0.0))
     preserve = float(thread.get("preserve", 0.0))

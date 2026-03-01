@@ -447,3 +447,34 @@ def test_simulation_selects_meme_decay_profile_by_dominant_axis():
         result = run_simulation(seed=seed, rounds=4, corpus=["샘플"], max_retries=0, packs=packs)
         profiles = {str(row.get("meme_decay_profile", "")) for row in result.get("meme_flow_logs", [])}
         assert profiles == {expected_profile}
+
+
+def test_simulation_applies_board_culture_weight_by_dial_axis():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+
+    hype_seed = SeedInput(
+        seed_id="SEED-CULTURE-H-001",
+        title="문화 가중치 H 테스트",
+        summary="냉소 보드에서 H 다이얼은 높은 문화 가중치가 적용되어야 한다",
+        board_id="B16",
+        zone_id="A",
+        dial={"U": 10, "E": 10, "M": 10, "S": 10, "H": 60},
+    )
+    evidence_seed = SeedInput(
+        seed_id="SEED-CULTURE-E-001",
+        title="문화 가중치 E 테스트",
+        summary="동일 보드에서 E 다이얼은 상대적으로 낮은 문화 가중치가 적용되어야 한다",
+        board_id="B16",
+        zone_id="A",
+        dial={"U": 10, "E": 60, "M": 10, "S": 10, "H": 10},
+    )
+
+    hype_result = run_simulation(seed=hype_seed, rounds=2, corpus=["샘플"], max_retries=0, packs=packs)
+    evidence_result = run_simulation(seed=evidence_seed, rounds=2, corpus=["샘플"], max_retries=0, packs=packs)
+
+    hype_first = hype_result["rounds"][0]
+    evidence_first = evidence_result["rounds"][0]
+
+    assert hype_first["board_emotion"] == "냉소"
+    assert evidence_first["board_emotion"] == "냉소"
+    assert float(hype_first["culture_weight_multiplier"]) > float(evidence_first["culture_weight_multiplier"])
