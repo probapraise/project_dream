@@ -391,3 +391,59 @@ def test_simulation_emits_cross_inflow_stage_logs():
     assert first["to_board_id"] != "B07"
     assert first["mode"] in {"repost", "summary_relay"}
     assert first["reason"] in {"moderation", "report_pressure"}
+
+
+def test_simulation_emits_meme_flow_logs_with_hub_factory_backflow():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+    seed = SeedInput(
+        seed_id="SEED-MEME-FLOW-001",
+        title="밈 확산 라우팅 테스트",
+        summary="허브에서 밈공장으로 확산 후 역류 로그가 기록되어야 한다",
+        board_id="B07",
+        zone_id="D",
+    )
+
+    result = run_simulation(seed=seed, rounds=5, corpus=["샘플"], max_retries=0, packs=packs)
+
+    assert "meme_flow_logs" in result
+    logs = result["meme_flow_logs"]
+    assert logs
+    assert logs[0]["phase"] == "hub_to_factory"
+    assert any(row["phase"] == "backflow" for row in logs)
+
+    rounds = {int(row["round"]) for row in logs}
+    assert rounds == set(range(1, result["thread_state"]["ended_round"] + 1))
+    assert all(row["meme_decay_profile"] in {"explosive", "weekly", "institutional"} for row in logs)
+    assert all(float(row["meme_heat"]) >= 0.0 for row in logs)
+
+
+def test_simulation_selects_meme_decay_profile_by_dominant_axis():
+    packs = load_packs(Path("packs"), enforce_phase1_minimums=True)
+
+    cases = [
+        (
+            "explosive",
+            {"U": 10, "E": 10, "M": 10, "S": 10, "H": 60},
+        ),
+        (
+            "weekly",
+            {"U": 10, "E": 60, "M": 10, "S": 10, "H": 10},
+        ),
+        (
+            "institutional",
+            {"U": 10, "E": 10, "M": 60, "S": 10, "H": 10},
+        ),
+    ]
+
+    for index, (expected_profile, dial) in enumerate(cases, start=1):
+        seed = SeedInput(
+            seed_id=f"SEED-MEME-PROFILE-{index:03d}",
+            title="밈 반감기 프로필 테스트",
+            summary="다이얼 축에 따라 반감기 프로필이 고정되어야 한다",
+            board_id="B07",
+            zone_id="D",
+            dial=dial,
+        )
+        result = run_simulation(seed=seed, rounds=4, corpus=["샘플"], max_retries=0, packs=packs)
+        profiles = {str(row.get("meme_decay_profile", "")) for row in result.get("meme_flow_logs", [])}
+        assert profiles == {expected_profile}

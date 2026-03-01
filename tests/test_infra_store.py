@@ -207,6 +207,34 @@ def test_file_run_repository_persists_thread_rows_when_present(tmp_path: Path):
     assert runlog_payload["summary"]["stage"]["max_attempts"] == 2
 
 
+def test_file_run_repository_persists_meme_flow_rows_when_present(tmp_path: Path):
+    repo = FileRunRepository(tmp_path / "runs")
+    sim_result = _sample_sim_result()
+    sim_result["meme_flow_logs"] = [
+        {
+            "round": 1,
+            "meme_seed_id": "MM-001",
+            "meme_decay_profile": "explosive",
+            "phase": "hub_to_factory",
+            "from_board_id": "B07",
+            "to_board_id": "B16",
+            "meme_heat": 1.0,
+        }
+    ]
+
+    run_dir = repo.persist_run(sim_result, _sample_report())
+    rows = [
+        json.loads(line)
+        for line in (run_dir / "runlog.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    meme_rows = [row for row in rows if row.get("type") == "meme_flow"]
+
+    assert len(meme_rows) == 1
+    assert meme_rows[0]["meme_seed_id"] == "MM-001"
+    assert meme_rows[0]["meme_decay_profile"] == "explosive"
+
+
 def test_file_run_repository_lists_runs_with_filters_and_pagination(tmp_path: Path):
     repo = FileRunRepository(tmp_path / "runs")
 

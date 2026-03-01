@@ -96,6 +96,8 @@ def persist_run(output_dir: Path, sim_result: dict, report: dict) -> Path:
             fp.write(json.dumps({"type": "action", **row}, ensure_ascii=False) + "\n")
         for row in sim_result.get("cross_inflow_logs", []):
             fp.write(json.dumps({"type": "cross_inflow", **row}, ensure_ascii=False) + "\n")
+        for row in sim_result.get("meme_flow_logs", []):
+            fp.write(json.dumps({"type": "meme_flow", **row}, ensure_ascii=False) + "\n")
 
         for row in sim_result.get("round_summaries", []):
             fp.write(json.dumps({"type": "round_summary", **row}, ensure_ascii=False) + "\n")

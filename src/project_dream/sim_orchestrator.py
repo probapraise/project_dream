@@ -41,6 +41,11 @@ _DIAL_AXIS_NAME_HINTS = {
     "H": ("풍자", "리믹스", "밈", "패러디"),
 }
 _MODERATION_ACTION_TYPES = {"HIDE_PREVIEW", "LOCK_THREAD", "GHOST_THREAD", "SANCTION_USER"}
+_MEME_HALF_LIFE_BY_PROFILE = {
+    "explosive": 0.5,
+    "weekly": 0.82,
+    "institutional": 0.94,
+}
 
 
 class ThreadCandidateStagePayload(TypedDict):
@@ -53,6 +58,7 @@ class RoundLoopStagePayload(TypedDict):
     gate_logs: list[dict]
     action_logs: list[dict]
     cross_inflow_logs: list[dict]
+    meme_flow_logs: list[dict]
     persona_memory: dict[str, list[str]]
 
 
@@ -137,6 +143,7 @@ def run_stage_node_round_loop(stage_payload: RoundLoopStagePayload | dict) -> Ro
         "gate_logs": _as_dict_list(payload.get("gate_logs")),
         "action_logs": _as_dict_list(payload.get("action_logs")),
         "cross_inflow_logs": _as_dict_list(payload.get("cross_inflow_logs")),
+        "meme_flow_logs": _as_dict_list(payload.get("meme_flow_logs")),
         "persona_memory": _normalize_persona_memory(payload.get("persona_memory")),
     }
 
@@ -679,6 +686,101 @@ def _collect_cross_inflow_logs(
     ]
 
 
+def _resolve_meme_seed_context(packs, meme_seed_id: str) -> dict:
+    if packs and meme_seed_id in packs.meme_seeds:
+        meme = dict(packs.meme_seeds[meme_seed_id])
+    else:
+        meme = {"id": meme_seed_id}
+    return {
+        "meme_seed_id": str(meme.get("id", meme_seed_id)).strip() or meme_seed_id,
+        "style_tags": _as_str_list(meme.get("style_tags")),
+        "intended_boards": _as_str_list(meme.get("intended_boards")),
+        "summary": str(meme.get("summary", "")).strip(),
+    }
+
+
+def _select_meme_decay_profile(*, dominant_axis: str, style_tags: list[str]) -> str:
+    axis = str(dominant_axis).strip().upper()
+    normalized_tags = {tag.strip().lower() for tag in style_tags if tag.strip()}
+    if axis in {"M", "S"}:
+        return "institutional"
+    if axis == "H":
+        return "explosive"
+    if axis == "E":
+        return "weekly"
+    if {"satire", "remix"} & normalized_tags:
+        return "explosive"
+    if {"countdown", "parody"} & normalized_tags:
+        return "weekly"
+    return "institutional"
+
+
+def _select_meme_factory_board(seed, meme_context: dict, cross_inflow_target_board: str) -> str:
+    for board_id in _as_str_list(meme_context.get("intended_boards")):
+        if board_id != seed.board_id:
+            return board_id
+    if cross_inflow_target_board and cross_inflow_target_board != seed.board_id:
+        return cross_inflow_target_board
+    return seed.board_id
+
+
+def _compute_meme_heat(*, round_idx: int, decay_profile: str) -> float:
+    if round_idx <= 0:
+        return 0.0
+    profile = str(decay_profile).strip().lower()
+    if profile == "explosive":
+        if round_idx == 1:
+            return 1.0
+        if round_idx == 2:
+            return 1.8
+        return float(round(1.8 * (_MEME_HALF_LIFE_BY_PROFILE["explosive"] ** (round_idx - 2)), 4))
+    if profile == "weekly":
+        if round_idx <= 3:
+            return float(round(0.9 + (round_idx - 1) * 0.25, 4))
+        return float(round(1.4 * (_MEME_HALF_LIFE_BY_PROFILE["weekly"] ** (round_idx - 3)), 4))
+    return float(round(0.95 * (_MEME_HALF_LIFE_BY_PROFILE["institutional"] ** (round_idx - 1)), 4))
+
+
+def _collect_meme_flow_logs(
+    *,
+    seed,
+    round_idx: int,
+    meme_seed_id: str,
+    meme_decay_profile: str,
+    meme_factory_board_id: str,
+    cross_inflow_target_board: str,
+) -> list[dict]:
+    heat = _compute_meme_heat(round_idx=round_idx, decay_profile=meme_decay_profile)
+    half_life = _MEME_HALF_LIFE_BY_PROFILE.get(meme_decay_profile, _MEME_HALF_LIFE_BY_PROFILE["institutional"])
+
+    if round_idx <= 1:
+        phase = "hub_to_factory"
+        from_board_id = seed.board_id
+        to_board_id = meme_factory_board_id
+    elif round_idx == 2:
+        phase = "factory_amplify"
+        from_board_id = meme_factory_board_id
+        to_board_id = meme_factory_board_id
+    else:
+        phase = "backflow"
+        from_board_id = meme_factory_board_id
+        to_board_id = seed.board_id
+
+    return [
+        {
+            "round": round_idx,
+            "meme_seed_id": meme_seed_id,
+            "meme_decay_profile": meme_decay_profile,
+            "half_life": half_life,
+            "phase": phase,
+            "from_board_id": from_board_id,
+            "to_board_id": to_board_id,
+            "relay_board_id": cross_inflow_target_board or meme_factory_board_id,
+            "meme_heat": heat,
+        }
+    ]
+
+
 def _round_node_generate_comment(
     *,
     seed,
@@ -843,6 +945,10 @@ def _round_node_emit_logs(
     flow_id: str,
     event_card_id: str,
     meme_seed_id: str,
+    meme_decay_profile: str,
+    meme_heat: float,
+    meme_half_life: float,
+    meme_phase: str,
     selected_thread_candidate_id: str,
     selected_title_pattern: str,
     selected_trigger_tags: list[str],
@@ -883,6 +989,10 @@ def _round_node_emit_logs(
         "comment_flow_id": flow_id,
         "event_card_id": event_card_id,
         "meme_seed_id": meme_seed_id,
+        "meme_decay_profile": meme_decay_profile,
+        "meme_heat": meme_heat,
+        "meme_half_life": meme_half_life,
+        "meme_phase": meme_phase,
         "thread_candidate_id": selected_thread_candidate_id,
         "status": status,
         "score": score,
@@ -970,6 +1080,7 @@ def extract_stage_payloads(sim_result: dict) -> SimulationStagePayloads:
             "gate_logs": list(sim_result.get("gate_logs", [])),
             "action_logs": list(sim_result.get("action_logs", [])),
             "cross_inflow_logs": list(sim_result.get("cross_inflow_logs", [])),
+            "meme_flow_logs": list(sim_result.get("meme_flow_logs", [])),
             "persona_memory": persona_memory_copy,
         },
         "moderation": {
@@ -999,6 +1110,7 @@ def assemble_sim_result_from_stage_payloads(stage_payloads: SimulationStagePaylo
         "gate_logs": list(round_payload.get("gate_logs", [])),
         "action_logs": list(round_payload.get("action_logs", [])),
         "cross_inflow_logs": list(round_payload.get("cross_inflow_logs", [])),
+        "meme_flow_logs": list(round_payload.get("meme_flow_logs", [])),
         "persona_memory": dict(round_payload.get("persona_memory", {})),
         "thread_state": end_payload.get("thread_state"),
     }
@@ -1015,6 +1127,7 @@ def run_simulation(
     gate_logs: list[dict] = []
     action_logs: list[dict] = []
     cross_inflow_logs: list[dict] = []
+    meme_flow_logs: list[dict] = []
     moderation_decisions: list[dict] = []
     persona_memory: dict[str, list[str]] = {}
     community_id = _select_community_id(seed, packs)
@@ -1047,6 +1160,16 @@ def run_simulation(
     dial_dominant_axis = _dominant_dial_axis(seed)
     dial_target_flow_id = _target_flow_from_dial(seed)
     dial_target_sort_tab = _target_sort_tab_from_dial(seed)
+    meme_context = _resolve_meme_seed_context(packs, meme_seed_id)
+    meme_decay_profile = _select_meme_decay_profile(
+        dominant_axis=dial_dominant_axis,
+        style_tags=_as_str_list(meme_context.get("style_tags")),
+    )
+    meme_half_life = _MEME_HALF_LIFE_BY_PROFILE.get(
+        meme_decay_profile,
+        _MEME_HALF_LIFE_BY_PROFILE["institutional"],
+    )
+    meme_factory_board_id = _select_meme_factory_board(seed, meme_context, cross_inflow_target_board)
     seed_forbidden_terms = _as_str_list(getattr(seed, "forbidden_terms", []))
     seed_sensitivity_tags = _as_str_list(getattr(seed, "sensitivity_tags", []))
     pack_gate_policy = None
@@ -1077,6 +1200,15 @@ def run_simulation(
         round_status_before = status
         round_action = "NO_OP"
         round_reason_rule_id = "RULE-PLZ-UI-01"
+        round_meme_events = _collect_meme_flow_logs(
+            seed=seed,
+            round_idx=round_idx,
+            meme_seed_id=meme_seed_id,
+            meme_decay_profile=meme_decay_profile,
+            meme_factory_board_id=meme_factory_board_id,
+            cross_inflow_target_board=cross_inflow_target_board,
+        )
+        round_meme_row = round_meme_events[0] if round_meme_events else {}
         participants = select_participants(seed, round_idx=round_idx, packs=packs)[:3]
 
         for idx, persona_id in enumerate(participants):
@@ -1141,6 +1273,10 @@ def run_simulation(
                 flow_id=flow_id,
                 event_card_id=event_card_id,
                 meme_seed_id=meme_seed_id,
+                meme_decay_profile=meme_decay_profile,
+                meme_heat=float(round_meme_row.get("meme_heat", 0.0)),
+                meme_half_life=float(round_meme_row.get("half_life", meme_half_life)),
+                meme_phase=str(round_meme_row.get("phase", "hub_to_factory")),
                 selected_thread_candidate_id=str(selected_thread.get("candidate_id", "TC-0")),
                 selected_title_pattern=selected_title_pattern,
                 selected_trigger_tags=selected_trigger_tags,
@@ -1213,6 +1349,7 @@ def run_simulation(
             action_logs=action_logs,
         )
         cross_inflow_logs.extend(cross_inflow_events)
+        meme_flow_logs.extend(round_meme_events)
 
         moderation_decisions.append(
             {
@@ -1245,6 +1382,9 @@ def run_simulation(
         "comment_flow_id": flow_id,
         "event_card_id": event_card_id,
         "meme_seed_id": meme_seed_id,
+        "meme_decay_profile": meme_decay_profile,
+        "meme_half_life": meme_half_life,
+        "meme_factory_board_id": meme_factory_board_id,
         "evidence_grade": evidence_grade,
         "evidence_type": evidence_type,
         "evidence_hours_left": evidence_hours_left,
@@ -1271,6 +1411,7 @@ def run_simulation(
             "gate_logs": gate_logs,
             "action_logs": action_logs,
             "cross_inflow_logs": cross_inflow_logs,
+            "meme_flow_logs": meme_flow_logs,
             "persona_memory": persona_memory,
         },
         "moderation": {
