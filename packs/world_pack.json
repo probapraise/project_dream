@@ -1,6 +1,23 @@
 {
   "schema_version": "world_schema.v1",
   "version": "1.0.0",
+  "forbidden_terms": [
+    "금서 원문",
+    "실명 주소",
+    "인장 위조법"
+  ],
+  "relation_conflict_rules": [
+    {
+      "id": "WCR-001",
+      "relation_type_a": "regulates",
+      "relation_type_b": "hostile_to"
+    },
+    {
+      "id": "WCR-002",
+      "relation_type_a": "allied_with",
+      "relation_type_b": "hostile_to"
+    }
+  ],
   "entities": [
     {
       "id": "WE-FACTION-ACADEMY",

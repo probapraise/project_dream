@@ -540,6 +540,10 @@ def load_packs(base_dir: Path, enforce_phase1_minimums: bool = False) -> LoadedP
     world_schema = {
         "schema_version": str(world_pack.get("schema_version", "world_schema.v1")),
         "version": str(world_pack.get("version", "1.0.0")),
+        "forbidden_terms": _as_str_list(world_pack.get("forbidden_terms")),
+        "relation_conflict_rules": [
+            dict(row) for row in world_pack.get("relation_conflict_rules", []) if isinstance(row, dict)
+        ],
         "entities": list(world_entities.values()),
         "relations": world_relations,
         "timeline_events": world_timeline_events,

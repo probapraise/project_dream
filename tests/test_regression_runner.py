@@ -373,3 +373,38 @@ def test_run_regression_batch_fails_when_story_checklist_check_fails(
     assert summary["totals"]["story_checklist_pass_runs"] == 0
     assert summary["gates"]["story_checklist_pass_runs"] is False
     assert summary["pass_fail"] is False
+
+
+def test_run_regression_batch_hard_fails_when_canon_gate_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    seeds_dir = tmp_path / "seeds"
+    seeds_dir.mkdir(parents=True, exist_ok=True)
+    _write_seed(seeds_dir / "seed_001.json", "SEED-R-CANON-001", "B07", "D")
+
+    monkeypatch.setattr(
+        regression_runner,
+        "enforce_canon_gate",
+        lambda seed, packs: (_ for _ in ()).throw(ValueError("canon gate failed: forbidden term")),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        regression_runner,
+        "run_simulation_with_backend",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("simulation should not be called")),
+        raising=False,
+    )
+
+    with pytest.raises(ValueError, match="canon gate failed"):
+        run_regression_batch(
+            seeds_dir=seeds_dir,
+            packs_dir=Path("packs"),
+            output_dir=tmp_path / "runs",
+            rounds=3,
+            max_seeds=1,
+            metric_set="v1",
+            min_community_coverage=1,
+            min_conflict_frame_runs=0,
+            min_moderation_hook_runs=0,
+            min_validation_warning_runs=0,
+        )

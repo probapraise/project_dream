@@ -2,6 +2,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+from project_dream.canon_gate import enforce_canon_gate
 from project_dream.data_ingest import load_corpus_texts
 from project_dream.eval_suite import REQUIRED_REPORT_KEYS, evaluate_run
 from project_dream.kb_index import build_index, retrieve_context
@@ -207,6 +208,7 @@ def run_regression_batch(
 
     for seed_file in seed_files:
         seed = SeedInput.model_validate_json(seed_file.read_text(encoding="utf-8"))
+        enforce_canon_gate(seed=seed, packs=packs)
         context = retrieve_context(
             index,
             task=f"{seed.title} {seed.summary}",

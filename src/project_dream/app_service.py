@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from project_dream.canon_gate import enforce_canon_gate
 from project_dream.data_ingest import load_corpus_texts
 from project_dream.eval_suite import evaluate_run
 from project_dream.infra.store import RunRepository
@@ -36,6 +37,7 @@ def simulate_and_persist(
     vector_db_path: Path | None = None,
 ) -> Path:
     packs = load_packs(packs_dir, enforce_phase1_minimums=True)
+    enforce_canon_gate(seed=seed, packs=packs)
     index = build_index(
         packs,
         vector_backend=vector_backend,

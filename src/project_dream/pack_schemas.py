@@ -293,9 +293,17 @@ class WorldGlossaryRow(_WorldCanonicalMeta):
     aliases: list[StrictStr] = Field(default_factory=list)
 
 
+class WorldRelationConflictRule(_StrictModel):
+    id: StrictStr
+    relation_type_a: StrictStr
+    relation_type_b: StrictStr
+
+
 class WorldPackPayload(_StrictModel):
     schema_version: StrictStr = "world_schema.v1"
     version: StrictStr = "1.0.0"
+    forbidden_terms: list[StrictStr] = Field(default_factory=list)
+    relation_conflict_rules: list[WorldRelationConflictRule] = Field(default_factory=list)
     entities: list[WorldEntityRow] = Field(default_factory=list)
     relations: list[WorldRelationRow] = Field(default_factory=list)
     timeline_events: list[WorldTimelineEventRow] = Field(default_factory=list)

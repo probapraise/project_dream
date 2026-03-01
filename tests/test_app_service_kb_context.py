@@ -284,3 +284,37 @@ def test_simulate_and_persist_forwards_vector_backend_to_build_index(
 
     assert captured["vector_backend"] == "sqlite"
     assert captured["vector_db_path"] == vector_db_path
+
+
+def test_simulate_and_persist_hard_fails_when_canon_gate_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    monkeypatch.setattr(
+        app_service,
+        "enforce_canon_gate",
+        lambda seed, packs: (_ for _ in ()).throw(ValueError("canon gate failed: forbidden term")),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        app_service,
+        "build_index",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("build_index should not be called")),
+        raising=False,
+    )
+
+    seed = SeedInput(
+        seed_id="SEED-KB-CANON-001",
+        title="장터 분쟁",
+        summary="금서 원문 유출 제안",
+        board_id="B07",
+        zone_id="D",
+    )
+    repo = _FakeRepository(tmp_path / "runs")
+
+    with pytest.raises(ValueError, match="canon gate failed"):
+        app_service.simulate_and_persist(
+            seed=seed,
+            rounds=3,
+            packs_dir=Path("packs"),
+            repository=repo,
+        )

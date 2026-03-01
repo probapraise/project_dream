@@ -86,6 +86,10 @@ def test_pack_service_loads_world_schema_v1_contract():
     assert packs.world_schema.get("version") == "1.0.0"
     assert isinstance(packs.world_schema.get("entities"), list)
     assert packs.world_schema["entities"]
+    assert isinstance(packs.world_schema.get("forbidden_terms"), list)
+    assert packs.world_schema["forbidden_terms"]
+    assert isinstance(packs.world_schema.get("relation_conflict_rules"), list)
+    assert packs.world_schema["relation_conflict_rules"]
     assert isinstance(packs.world_schema.get("relations"), list)
     assert packs.world_schema["relations"]
     assert isinstance(packs.world_schema.get("timeline_events"), list)
