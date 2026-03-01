@@ -72,6 +72,30 @@ def test_render_markdown_includes_regress_live_diff_path_when_present():
     assert "regress_live_diff_path: `runs/regressions/regress-live-diff.md`" in markdown
 
 
+def test_render_markdown_includes_regress_live_diff_brief_when_present():
+    summary = {
+        "schema_version": "regression.v1",
+        "metric_set": "v2",
+        "pass_fail": True,
+        "totals": {},
+        "gates": {},
+        "regress_live_diff_brief": {
+            "status": "FAIL",
+            "top_failures": [
+                "eval_pass_rate: current=0.5000 baseline=1.0000 allowed_drop=0.0000",
+                "unique_communities: current=1 baseline=3 allowed_drop=0",
+            ],
+        },
+    }
+
+    markdown = render_summary_markdown(summary)
+
+    assert "### Regress-Live Diff Brief" in markdown
+    assert "status: **FAIL**" in markdown
+    assert "eval_pass_rate: current=0.5000 baseline=1.0000 allowed_drop=0.0000" in markdown
+    assert "unique_communities: current=1 baseline=3 allowed_drop=0" in markdown
+
+
 def test_render_markdown_fallback_when_summary_missing():
     markdown = render_missing_summary_markdown()
 
@@ -119,3 +143,47 @@ def test_write_job_summary_includes_regress_live_diff_link_when_file_exists(tmp_
 
     assert "regress_live_diff_path" in content
     assert str(diff_file) in content
+
+
+def test_write_job_summary_includes_regress_live_diff_brief_when_failures_exist(tmp_path: Path):
+    regressions_dir = tmp_path / "runs" / "regressions"
+    regressions_dir.mkdir(parents=True, exist_ok=True)
+
+    summary_file = regressions_dir / "regression-20260227-010102-000001.json"
+    summary_file.write_text(
+        json.dumps(
+            {
+                "schema_version": "regression.v1",
+                "metric_set": "v2",
+                "pass_fail": True,
+                "totals": {"seed_runs": 1, "eval_pass_runs": 1},
+                "gates": {"format_missing_zero": True},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    diff_file = regressions_dir / "regress-live-diff.md"
+    diff_file.write_text(
+        "\n".join(
+            [
+                "## Regress-Live Baseline Diff",
+                "",
+                "- status: **FAIL**",
+                "",
+                "### Failures",
+                "- eval_pass_rate: current=0.5000 baseline=1.0000 allowed_drop=0.0000",
+                "- unique_communities: current=1 baseline=3 allowed_drop=0",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    out = tmp_path / "summary.md"
+    write_job_summary(regressions_dir, out)
+    content = out.read_text(encoding="utf-8")
+
+    assert "### Regress-Live Diff Brief" in content
+    assert "status: **FAIL**" in content
+    assert "eval_pass_rate: current=0.5000 baseline=1.0000 allowed_drop=0.0000" in content

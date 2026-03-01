@@ -17,6 +17,37 @@ def find_regress_live_diff(regressions_dir: Path) -> Path | None:
     return path
 
 
+def extract_regress_live_diff_brief(markdown: str) -> dict:
+    lines = str(markdown).splitlines()
+    status = "UNKNOWN"
+    failures: list[str] = []
+    in_failures = False
+
+    for raw in lines:
+        stripped = raw.strip()
+        if stripped.startswith("- status: **") and stripped.endswith("**"):
+            status = stripped.removeprefix("- status: **").removesuffix("**").strip() or "UNKNOWN"
+            continue
+        if stripped == "### Failures":
+            in_failures = True
+            continue
+        if not in_failures:
+            continue
+        if stripped.startswith("### "):
+            break
+        if not stripped.startswith("- "):
+            continue
+        failure = stripped[2:].strip()
+        if not failure or failure.lower() == "none":
+            continue
+        failures.append(failure)
+
+    return {
+        "status": status,
+        "top_failures": failures[:3],
+    }
+
+
 def render_summary_markdown(summary: dict) -> str:
     gates = summary.get("gates", {})
     totals = summary.get("totals", {})
@@ -25,29 +56,56 @@ def render_summary_markdown(summary: dict) -> str:
     metric_set = summary.get("metric_set", "unknown")
     summary_path = summary.get("summary_path", "")
     regress_live_diff_path = summary.get("regress_live_diff_path", "")
+    regress_live_diff_brief = summary.get("regress_live_diff_brief", {})
+    brief_status = ""
+    brief_failures: list[str] = []
+    if isinstance(regress_live_diff_brief, dict):
+        brief_status = str(regress_live_diff_brief.get("status", "")).strip()
+        top_failures = regress_live_diff_brief.get("top_failures", [])
+        if isinstance(top_failures, list):
+            brief_failures = [str(row).strip() for row in top_failures if str(row).strip()]
 
     lines = [
         "## Regression Gate Summary",
         "",
         f"- status: **{status}**",
         f"- metric_set: `{metric_set}`",
-        "",
-        "### Totals",
-        f"- seed_runs: `{totals.get('seed_runs', 0)}`",
-        f"- eval_pass_runs: `{totals.get('eval_pass_runs', 0)}`",
-        f"- unique_communities: `{totals.get('unique_communities', 0)}`",
-        f"- story_checklist_pass_runs: `{totals.get('story_checklist_pass_runs', 0)}`",
-        f"- register_switch_runs: `{totals.get('register_switch_runs', 0)}`",
-        f"- register_switch_rate: `{totals.get('register_switch_rate', 0.0)}`",
-        f"- cross_inflow_runs: `{totals.get('cross_inflow_runs', 0)}`",
-        f"- cross_inflow_rate: `{totals.get('cross_inflow_rate', 0.0)}`",
-        f"- meme_flow_runs: `{totals.get('meme_flow_runs', 0)}`",
-        f"- meme_flow_rate: `{totals.get('meme_flow_rate', 0.0)}`",
-        f"- avg_culture_dial_alignment_rate: `{totals.get('avg_culture_dial_alignment_rate', 0.0)}`",
-        f"- avg_culture_weight: `{totals.get('avg_culture_weight', 0.0)}`",
-        "",
-        "### Gates",
     ]
+
+    if brief_status or brief_failures:
+        lines.extend(
+            [
+                "",
+                "### Regress-Live Diff Brief",
+                f"- status: **{brief_status or 'UNKNOWN'}**",
+            ]
+        )
+        if brief_failures:
+            for row in brief_failures[:3]:
+                lines.append(f"- failure: {row}")
+        else:
+            lines.append("- failure: none")
+
+    lines.extend(
+        [
+            "",
+            "### Totals",
+            f"- seed_runs: `{totals.get('seed_runs', 0)}`",
+            f"- eval_pass_runs: `{totals.get('eval_pass_runs', 0)}`",
+            f"- unique_communities: `{totals.get('unique_communities', 0)}`",
+            f"- story_checklist_pass_runs: `{totals.get('story_checklist_pass_runs', 0)}`",
+            f"- register_switch_runs: `{totals.get('register_switch_runs', 0)}`",
+            f"- register_switch_rate: `{totals.get('register_switch_rate', 0.0)}`",
+            f"- cross_inflow_runs: `{totals.get('cross_inflow_runs', 0)}`",
+            f"- cross_inflow_rate: `{totals.get('cross_inflow_rate', 0.0)}`",
+            f"- meme_flow_runs: `{totals.get('meme_flow_runs', 0)}`",
+            f"- meme_flow_rate: `{totals.get('meme_flow_rate', 0.0)}`",
+            f"- avg_culture_dial_alignment_rate: `{totals.get('avg_culture_dial_alignment_rate', 0.0)}`",
+            f"- avg_culture_weight: `{totals.get('avg_culture_weight', 0.0)}`",
+            "",
+            "### Gates",
+        ]
+    )
 
     for key in sorted(gates.keys()):
         icon = "PASS" if gates.get(key) else "FAIL"
@@ -99,6 +157,10 @@ def write_job_summary(regressions_dir: Path, output_file: Path) -> None:
         summary.setdefault("summary_path", str(latest))
         if regress_live_diff is not None:
             summary.setdefault("regress_live_diff_path", str(regress_live_diff))
+            summary.setdefault(
+                "regress_live_diff_brief",
+                extract_regress_live_diff_brief(regress_live_diff.read_text(encoding="utf-8")),
+            )
         content = render_summary_markdown(summary)
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
